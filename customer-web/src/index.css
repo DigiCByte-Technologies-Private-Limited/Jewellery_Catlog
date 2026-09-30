@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-serif: 'Cinzel', serif;
+    --font-display: 'Cormorant Garamond', serif;
+    --font-sans: 'Montserrat', sans-serif;
+  }
+
+  html {
+    scroll-behavior: auto !important; /* Lenis handles physics-based smooth scrolling */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #FAF8F5;
+    color: #1C1917;
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+  }
+
+  h1, h2, h3, .font-serif {
+    font-family: var(--font-serif);
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* Hardware accelerated compositor layer helper */
+.gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+/* Ambient glow performance optimization */
+.ambient-glow {
+  transform: translateZ(0);
+  pointer-events: none;
+  contain: strict;
+  will-change: transform;
+}
+
+
+/* Place Vendôme Parisian Silk Gradients & Shadows */
+.gold-gradient-text {
+  background: linear-gradient(135deg, #8C6A28 0%, #B89047 50%, #78581B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-gradient-shimmer {
+  background: linear-gradient(90deg, #78581B 0%, #B89047 25%, #D4AF37 50%, #B89047 75%, #78581B 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine 6s linear infinite;
+}
+
+@keyframes shine {
+  to {
+    background-position: 200% center;
+  }
+}
+
+.shadow-champagne {
+  box-shadow: 0 12px 36px rgba(184, 144, 71, 0.10);
+}
+
+.shadow-soft {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+}
+
+/* Custom Atelier Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAF8F5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D6D1C7;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B89047;
+}
+
+
