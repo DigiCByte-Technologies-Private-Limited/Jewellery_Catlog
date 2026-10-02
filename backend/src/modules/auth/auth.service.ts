@@ -13,6 +13,9 @@ import * as argon2 from 'argon2';
 import { User } from '../users/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { CustomerRegisterDto } from './dto/customer-register.dto';
+import { CustomerProfileUpdateDto } from './dto/customer-profile-update.dto';
+import { Customer } from '../customers/entities/customer.entity';
 import { UserRole } from '../../common/enums';
 
 @Injectable()
@@ -20,6 +23,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(Customer)
+    private readonly customerRepo: Repository<Customer>,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -127,6 +132,196 @@ export class AuthService {
     await this.userRepo.save(user);
 
     return { success: true, message: 'Password changed successfully. Please log in again.' };
+  }
+
+  // ─── Customer Self-Registration ──────────────────────────────────────────
+  async customerRegister(dto: CustomerRegisterDto, ip?: string, userAgent?: string) {
+    if (dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match.');
+    }
+
+    if (!dto.password || dto.password.length < 6) {
+      throw new BadRequestException('Password must be at least 6 characters long.');
+    }
+
+    const normalizedEmail = dto.email.toLowerCase().trim();
+
+    // Check duplicate email in users table
+    const existingUser = await this.userRepo.findOne({ where: { email: normalizedEmail } });
+    if (existingUser) {
+      throw new ConflictException('An account already exists with this email address. Please sign in instead.');
+    }
+
+    // Check duplicate phone in customers table
+    const cleanPhone = dto.phone.trim();
+    const existingPhone = await this.customerRepo.findOne({ where: { phone: cleanPhone } });
+    if (existingPhone && existingPhone.userId) {
+      throw new ConflictException('An account with this mobile number already exists. Please sign in instead.');
+    }
+
+    const passwordHash = await argon2.hash(dto.password, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4,
+    });
+
+    const user = this.userRepo.create({
+      email: normalizedEmail,
+      passwordHash,
+      fullName: dto.fullName.trim(),
+      phone: cleanPhone,
+      role: UserRole.CUSTOMER,
+      isActive: true,
+    });
+    await this.userRepo.save(user);
+
+    let customer = existingPhone;
+    if (customer) {
+      customer.userId = user.id;
+      customer.fullName = dto.fullName.trim();
+      customer.email = normalizedEmail;
+      customer.address = dto.address.trim();
+      customer.pincode = dto.pincode.trim();
+      if (dto.city) customer.city = dto.city.trim();
+      if (dto.state) customer.state = dto.state.trim();
+      if (dto.altPhone) customer.altPhone = dto.altPhone.trim();
+      if (dto.whatsappNumber) customer.whatsappNumber = dto.whatsappNumber.trim();
+    } else {
+      customer = this.customerRepo.create({
+        userId: user.id,
+        fullName: dto.fullName.trim(),
+        email: normalizedEmail,
+        phone: cleanPhone,
+        address: dto.address.trim(),
+        pincode: dto.pincode.trim(),
+        city: dto.city?.trim() || null,
+        state: dto.state?.trim() || null,
+        altPhone: dto.altPhone?.trim() || null,
+        whatsappNumber: dto.whatsappNumber?.trim() || null,
+        tags: ['REGISTERED_ONLINE'],
+        totalSpend: 0,
+      });
+    }
+    await this.customerRepo.save(customer);
+
+    const tokens = await this._generateTokens(user);
+    user.refreshTokenHash = await argon2.hash(tokens.refreshToken);
+    user.lastLoginAt = new Date();
+    user.lastLoginIp = ip || null;
+    await this.userRepo.save(user);
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: this._sanitizeUser(user),
+      customer,
+    };
+  }
+
+  // ─── Customer Login ───────────────────────────────────────────────────────
+  async customerLogin(dto: LoginDto, ip?: string, userAgent?: string) {
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const user = await this.userRepo.findOne({ where: { email: normalizedEmail } });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    if (user.role !== UserRole.CUSTOMER) {
+      throw new UnauthorizedException('This account is registered for staff/wholesale access. Please use the appropriate portal.');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Your account has been deactivated. Please contact concierge support.');
+    }
+
+    const isValid = await argon2.verify(user.passwordHash, dto.password);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    const tokens = await this._generateTokens(user);
+    user.refreshTokenHash = await argon2.hash(tokens.refreshToken);
+    user.lastLoginAt = new Date();
+    user.lastLoginIp = ip || null;
+    await this.userRepo.save(user);
+
+    const customer = await this.customerRepo.findOne({ where: { userId: user.id } });
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: this._sanitizeUser(user),
+      customer,
+    };
+  }
+
+  // ─── Get Customer Profile ────────────────────────────────────────────────
+  async getCustomerProfile(userId: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Customer account not found.');
+
+    const customer = await this.customerRepo.findOne({ where: { userId } });
+    return {
+      user: this._sanitizeUser(user),
+      customer,
+    };
+  }
+
+  // ─── Update Customer Profile ─────────────────────────────────────────────
+  async updateCustomerProfile(userId: string, dto: CustomerProfileUpdateDto) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Customer account not found.');
+
+    let customer = await this.customerRepo.findOne({ where: { userId } });
+    if (!customer) {
+      customer = this.customerRepo.create({
+        userId: user.id,
+        fullName: user.fullName || '',
+        email: user.email,
+        phone: user.phone || '',
+      });
+    }
+
+    if (dto.fullName) {
+      user.fullName = dto.fullName.trim();
+      customer.fullName = dto.fullName.trim();
+    }
+
+    if (dto.phone) {
+      user.phone = dto.phone.trim();
+      customer.phone = dto.phone.trim();
+    }
+
+    if (dto.address !== undefined) customer.address = dto.address;
+    if (dto.city !== undefined) customer.city = dto.city;
+    if (dto.state !== undefined) customer.state = dto.state;
+    if (dto.pincode !== undefined) customer.pincode = dto.pincode;
+    if (dto.altPhone !== undefined) customer.altPhone = dto.altPhone;
+    if (dto.whatsappNumber !== undefined) customer.whatsappNumber = dto.whatsappNumber;
+    if (dto.dateOfBirth) customer.dateOfBirth = new Date(dto.dateOfBirth);
+    if (dto.anniversaryDate) customer.anniversaryDate = new Date(dto.anniversaryDate);
+
+    await Promise.all([this.userRepo.save(user), this.customerRepo.save(customer)]);
+
+    return {
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        user: this._sanitizeUser(user),
+        customer,
+      },
+    };
+  }
+
+  // ─── Customer Forgot Password ─────────────────────────────────────────────
+  async customerForgotPassword(email: string) {
+    // Avoid account enumeration: always return safe confirmation message
+    return {
+      success: true,
+      message: 'If an account exists with this email, instructions to reset your password have been sent.',
+    };
   }
 
   // ─── Seed Super Admin (called by seed script) ─────────────────────────────

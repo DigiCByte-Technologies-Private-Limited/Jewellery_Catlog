@@ -28,6 +28,10 @@ export class ProductRequest {
   @Column({ type: 'varchar', length: 32, unique: true })
   requestId: string; // e.g. "REQ-000124"
 
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  customerId: string | null;
+
   @Column({ type: 'varchar', length: 255 })
   customerName: string;
 

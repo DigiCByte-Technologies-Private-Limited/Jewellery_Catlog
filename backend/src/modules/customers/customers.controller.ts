@@ -8,7 +8,14 @@ import { CustomersService } from './customers.service';
 
 @ApiTags('Customers & CRM')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(
+  UserRole.SUPER_ADMIN,
+  UserRole.STORE_MANAGER,
+  UserRole.SALES_STAFF,
+  UserRole.MARKETING,
+  UserRole.ACCOUNTANT,
+)
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}

@@ -15,19 +15,19 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole, ProductStatus, MetalType, MetalPurity } from '../../common/enums';
 import { ProductsService } from './products.service';
 
 @ApiTags('Products')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'List products with filters, pagination, sorting' })
   findAll(@Query() query: any) {
     return this.productsService.findAll({
@@ -41,19 +41,27 @@ export class ProductsController {
       hasStones: query.hasStones !== undefined ? query.hasStones === 'true' : undefined,
       audience: query.audience,
       occasion: query.occasion,
+      minWeight: query.minWeight !== undefined ? parseFloat(query.minWeight) : undefined,
+      maxWeight: query.maxWeight !== undefined ? parseFloat(query.maxWeight) : undefined,
+      weightRange: query.weightRange,
+      minPrice: query.minPrice !== undefined ? parseFloat(query.minPrice) : undefined,
+      maxPrice: query.maxPrice !== undefined ? parseFloat(query.maxPrice) : undefined,
+      priceRange: query.priceRange,
       sortBy: query.sortBy ?? 'createdAt',
       sortOrder: (query.sortOrder?.toUpperCase() ?? 'DESC') as 'ASC' | 'DESC',
     });
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get single product with relations' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.productsService.findOne(id);
   }
 
   @Post()
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.STORE_MANAGER,
@@ -66,7 +74,8 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.STORE_MANAGER,
@@ -79,7 +88,8 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER)
   @ApiOperation({ summary: 'Soft-delete a product (cannot delete PUBLISHED products)' })
   remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
@@ -87,7 +97,8 @@ export class ProductsController {
   }
 
   @Post(':id/duplicate')
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.CATALOG_MANAGER)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Duplicate a product as a new draft' })
@@ -96,7 +107,8 @@ export class ProductsController {
   }
 
   @Patch(':id/status')
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.STORE_MANAGER,
@@ -113,13 +125,22 @@ export class ProductsController {
   }
 
   @Get(':id/price-breakdown')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get live price calculation breakdown for a product' })
   getPriceBreakdown(@Param('id', ParseUUIDPipe) id: string) {
     return this.productsService.getPriceBreakdown(id);
   }
 
+  @Get(':id/current-price')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get current dynamic price calculation for a product' })
+  getCurrentPrice(@Param('id', ParseUUIDPipe) id: string) {
+    return this.productsService.getPriceBreakdown(id);
+  }
+
   @Post('bulk-status')
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.CATALOG_MANAGER)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Bulk change status for multiple products' })

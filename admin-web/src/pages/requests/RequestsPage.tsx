@@ -54,6 +54,17 @@ export function RequestsPage() {
   });
   const stores: StoreItem[] = storesResponse || [];
 
+  // 1b. Fetch Wholesale Partners List
+  const { data: partnersResponse } = useQuery({
+    queryKey: ['wholesale-partners-list'],
+    queryFn: async () => {
+      const res = await requestsApi.getWholesalePartners();
+      return res.data?.data || [];
+    },
+    staleTime: 60000,
+  });
+  const partners = partnersResponse || [];
+
   // 2. Fetch Pipeline Stats
   const { data: statsResponse, refetch: refetchStats } = useQuery({
     queryKey: ['requests-pipeline-stats', storeFilter],
@@ -262,7 +273,7 @@ export function RequestsPage() {
       },
     },
     {
-      header: 'Assigned Showroom',
+      header: 'Assigned Destination',
       cell: (r: ProductRequestItem) => {
         if (r.assignedStore) {
           return (
@@ -274,6 +285,22 @@ export function RequestsPage() {
                 </div>
                 <div className="text-[10px] text-slate-500 font-mono">
                   {r.assignedStore.city}
+                </div>
+              </div>
+            </div>
+          );
+        }
+        if (r.assignedToUserId) {
+          const partner = partners.find((p) => p.userId === r.assignedToUserId);
+          return (
+            <div className="flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <div>
+                <div className="text-xs font-semibold text-emerald-950 truncate max-w-[140px]">
+                  {partner?.companyName || 'Wholesale Partner'}
+                </div>
+                <div className="text-[10px] text-emerald-700 font-mono">
+                  {partner?.city ? `${partner.city} · ` : ''}Partner
                 </div>
               </div>
             </div>
@@ -347,7 +374,7 @@ export function RequestsPage() {
           onClick={() => handleOpenDetail(r)}
         >
           <Eye className="w-3.5 h-3.5 mr-1 text-slate-500" />
-          {r.assignedStoreId ? 'View / Follow-up' : 'Assign Store'}
+          {r.assignedStoreId || r.assignedToUserId ? 'View / Follow-up' : 'Assign'}
         </Button>
       ),
     },
@@ -456,13 +483,18 @@ export function RequestsPage() {
                   </div>
                 </div>
 
-                {/* Assigned Store Banner */}
+                {/* Assigned Destination Banner */}
                 <div className="mb-3 p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 text-[11px]">Showroom:</span>
+                  <span className="text-slate-500 text-[11px]">Assigned:</span>
                   {r.assignedStore ? (
-                    <span className="font-semibold text-blue-700 flex items-center gap-1">
-                      <Store className="w-3.5 h-3.5" />
+                    <span className="font-semibold text-blue-700 flex items-center gap-1 truncate max-w-[200px]">
+                      <Store className="w-3.5 h-3.5 shrink-0" />
                       {r.assignedStore.name} ({r.assignedStore.city})
+                    </span>
+                  ) : r.assignedToUserId ? (
+                    <span className="font-semibold text-emerald-700 flex items-center gap-1 truncate max-w-[200px]">
+                      <Building2 className="w-3.5 h-3.5 shrink-0" />
+                      {partners.find((p) => p.userId === r.assignedToUserId)?.companyName || 'Wholesale Partner'}
                     </span>
                   ) : (
                     <span className="font-semibold text-amber-700 flex items-center gap-1">
@@ -494,7 +526,7 @@ export function RequestsPage() {
                   onClick={() => handleOpenDetail(r)}
                 >
                   <Eye className="w-3.5 h-3.5 mr-1 text-slate-500" />
-                  {r.assignedStoreId ? 'View & Follow-up' : 'Assign Store'}
+                  {r.assignedStoreId || r.assignedToUserId ? 'View & Follow-up' : 'Assign'}
                 </Button>
               </div>
             </div>

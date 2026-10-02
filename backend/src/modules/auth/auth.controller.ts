@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   UseGuards,
   Req,
@@ -15,6 +16,8 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { CustomerRegisterDto } from './dto/customer-register.dto';
+import { CustomerProfileUpdateDto } from './dto/customer-profile-update.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -98,4 +101,95 @@ export class AuthController {
   ) {
     return this.authService.changePassword(req.user.id, body.currentPassword, body.newPassword);
   }
+
+  // ─── Customer Endpoints ──────────────────────────────────────────────────
+  @Post('customer/register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Customer self-registration' })
+  @ApiResponse({ status: 201, description: 'Customer registered successfully' })
+  async customerRegister(
+    @Body() dto: CustomerRegisterDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ip = req.ip || req.headers['x-forwarded-for']?.toString();
+    const userAgent = req.headers['user-agent'];
+    const result = await this.authService.customerRegister(dto, ip, userAgent);
+
+    res.cookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return {
+      success: true,
+      message: 'Welcome to Aurum Jewels. Your account has been created.',
+      data: {
+        accessToken: result.accessToken,
+        user: result.user,
+        customer: result.customer,
+      },
+    };
+  }
+
+  @Post('customer/login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Customer login with email and password' })
+  @ApiResponse({ status: 200, description: 'Customer login successful' })
+  async customerLogin(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ip = req.ip || req.headers['x-forwarded-for']?.toString();
+    const userAgent = req.headers['user-agent'];
+    const result = await this.authService.customerLogin(dto, ip, userAgent);
+
+    res.cookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return {
+      success: true,
+      message: 'Login successful',
+      data: {
+        accessToken: result.accessToken,
+        user: result.user,
+        customer: result.customer,
+      },
+    };
+  }
+
+  @Get('customer/me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get logged-in customer profile and account details' })
+  async getCustomerProfile(@Req() req: any) {
+    const result = await this.authService.getCustomerProfile(req.user.id);
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Patch('customer/profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update customer profile' })
+  async updateCustomerProfile(@Req() req: any, @Body() dto: CustomerProfileUpdateDto) {
+    return this.authService.updateCustomerProfile(req.user.id, dto);
+  }
+
+  @Post('customer/forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Customer forgot password request' })
+  async customerForgotPassword(@Body('email') email: string) {
+    return this.authService.customerForgotPassword(email);
+  }
 }
+

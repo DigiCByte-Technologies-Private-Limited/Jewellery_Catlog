@@ -25,6 +25,10 @@ import { StorageModule } from './modules/storage/storage.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import { StoresModule } from './modules/stores/stores.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { CustomDesignsModule } from './modules/custom-designs/custom-designs.module';
+import { WholesaleSubmissionsModule } from './modules/wholesale-submissions/wholesale-submissions.module';
+import { WholesaleAuthModule } from './modules/wholesale-auth/wholesale-auth.module';
 
 @Module({
   imports: [
@@ -68,6 +72,10 @@ import { StoresModule } from './modules/stores/stores.module';
     SubscriptionsModule,
     RequestsModule,
     StoresModule,
+    NotificationsModule,
+    CustomDesignsModule,
+    WholesaleSubmissionsModule,
+    WholesaleAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -2,12 +2,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MetalRate } from './entities/metal-rate.entity';
-import { MetalType, MetalPurity, ApprovalStatus } from '../../common/enums';
+import { Product } from '../products/entities/product.entity';
+import { ProductStone } from '../products/entities/product-stone.entity';
+import { MetalType, MetalPurity, ApprovalStatus, PricingMode } from '../../common/enums';
+import { AuditService } from '../audit/audit.service';
+import { PricingCalculatorService } from '../pricing/pricing-calculator.service';
 
 const PURITY_FACTORS: Record<MetalPurity, number> = {
   [MetalPurity.K24]: 1.0,
@@ -24,6 +27,10 @@ export class MetalRatesService {
   constructor(
     @InjectRepository(MetalRate)
     private readonly rateRepo: Repository<MetalRate>,
+    @InjectRepository(Product)
+    private readonly productRepo: Repository<Product>,
+    private readonly auditService: AuditService,
+    private readonly pricingService: PricingCalculatorService,
   ) {}
 
   // ─── Get latest active rate for each metal+purity combo ───────────────────
@@ -34,7 +41,25 @@ export class MetalRatesService {
       .orderBy('r.metalType', 'ASC')
       .addOrderBy('r.purity', 'ASC')
       .getMany();
-    return { success: true, data: rates };
+
+    // Attach count of active products utilizing each rate
+    const enrichedRates = await Promise.all(
+      rates.map(async (rate) => {
+        const count = await this.productRepo.count({
+          where: {
+            metalType: rate.metalType,
+            purity: rate.purity,
+            pricingMode: PricingMode.DYNAMIC,
+          },
+        });
+        return {
+          ...rate,
+          productsCount: count,
+        };
+      }),
+    );
+
+    return { success: true, data: enrichedRates };
   }
 
   // ─── Get single current rate for a metal+purity ────────────────────────────
@@ -70,6 +95,112 @@ export class MetalRatesService {
     };
   }
 
+  // ─── Rate Change Impact Preview ──────────────────────────────────────────
+  async getImpactPreview(metalType: MetalType, purity: MetalPurity, newRatePerGram: number) {
+    if (!newRatePerGram || isNaN(newRatePerGram) || newRatePerGram <= 0) {
+      throw new BadRequestException('New rate per gram must be a positive number');
+    }
+
+    const currentRate = await this.getRateForPurity(metalType, purity);
+    const currentRateValue = currentRate ? Number(currentRate.ratePerGram) : 0;
+    const rateDiff = parseFloat((newRatePerGram - currentRateValue).toFixed(2));
+    const ratePercentageChange = currentRateValue > 0
+      ? parseFloat(((rateDiff / currentRateValue) * 100).toFixed(2))
+      : 100;
+
+    // Fetch all active products matching this metalType + purity
+    const products = await this.productRepo.find({
+      where: {
+        metalType,
+        purity,
+        pricingMode: PricingMode.DYNAMIC,
+      },
+      relations: { stones: true },
+    });
+
+    let totalCurrentValue = 0;
+    let totalNewValue = 0;
+    const sampleProducts: any[] = [];
+
+    for (const p of products) {
+      const totalStoneValue = (p.stones || []).reduce(
+        (sum: number, s: ProductStone) => sum + Number(s.totalStonePrice || 0),
+        0,
+      );
+
+      // Old price calculation
+      const oldBreakdown = this.pricingService.calculate({
+        pricingMode: p.pricingMode,
+        fixedPrice: p.fixedPrice ? Number(p.fixedPrice) : undefined,
+        grossWeight: Number(p.grossWeight),
+        stoneWeight: p.hasStones ? Number(p.stoneWeight ?? 0) : 0,
+        lacWeight: Number(p.lacWeight ?? 0),
+        metalRatePerGram: currentRateValue,
+        wastagePercent: p.wastagePercent ? Number(p.wastagePercent) : 0,
+        makingChargeType: p.makingChargeType ?? undefined,
+        makingChargeValue: p.makingChargeValue ? Number(p.makingChargeValue) : 0,
+        majuriType: p.majuriType ?? undefined,
+        majuriValue: p.majuriValue ? Number(p.majuriValue) : 0,
+        serviceCharges: p.serviceCharges ? Number(p.serviceCharges) : 0,
+        totalStoneValue,
+        gstRatePercent: 3,
+        roundTo: 1,
+      });
+
+      // New price calculation
+      const newBreakdown = this.pricingService.calculate({
+        pricingMode: p.pricingMode,
+        fixedPrice: p.fixedPrice ? Number(p.fixedPrice) : undefined,
+        grossWeight: Number(p.grossWeight),
+        stoneWeight: p.hasStones ? Number(p.stoneWeight ?? 0) : 0,
+        lacWeight: Number(p.lacWeight ?? 0),
+        metalRatePerGram: newRatePerGram,
+        wastagePercent: p.wastagePercent ? Number(p.wastagePercent) : 0,
+        makingChargeType: p.makingChargeType ?? undefined,
+        makingChargeValue: p.makingChargeValue ? Number(p.makingChargeValue) : 0,
+        majuriType: p.majuriType ?? undefined,
+        majuriValue: p.majuriValue ? Number(p.majuriValue) : 0,
+        serviceCharges: p.serviceCharges ? Number(p.serviceCharges) : 0,
+        totalStoneValue,
+        gstRatePercent: 3,
+        roundTo: 1,
+      });
+
+      totalCurrentValue += oldBreakdown.finalPriceRounded;
+      totalNewValue += newBreakdown.finalPriceRounded;
+
+      if (sampleProducts.length < 6) {
+        sampleProducts.push({
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          grossWeight: Number(p.grossWeight),
+          netMetalWeight: Number(p.netMetalWeight || p.grossWeight),
+          oldPrice: oldBreakdown.finalPriceRounded,
+          newPrice: newBreakdown.finalPriceRounded,
+          difference: newBreakdown.finalPriceRounded - oldBreakdown.finalPriceRounded,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        metalType,
+        purity,
+        currentRatePerGram: currentRateValue,
+        newRatePerGram: parseFloat(newRatePerGram.toFixed(2)),
+        rateDifference: rateDiff,
+        ratePercentageChange,
+        affectedProductsCount: products.length,
+        totalCurrentValue: Math.round(totalCurrentValue),
+        totalNewValue: Math.round(totalNewValue),
+        totalValueChange: Math.round(totalNewValue - totalCurrentValue),
+        sampleProducts,
+      },
+    };
+  }
+
   // ─── Create / update rate ─────────────────────────────────────────────────
   async createRate(
     dto: {
@@ -82,7 +213,11 @@ export class MetalRatesService {
     createdById: string,
     userRole: string,
   ) {
-    if (dto.ratePerGram <= 0) throw new BadRequestException('Rate per gram must be positive');
+    if (!dto.ratePerGram || isNaN(dto.ratePerGram) || dto.ratePerGram <= 0) {
+      throw new BadRequestException('Rate per gram must be a positive number');
+    }
+
+    const cleanRate = parseFloat(Number(dto.ratePerGram).toFixed(2));
 
     // Find current active rate to store as previous
     const current = await this.rateRepo.findOne({
@@ -97,7 +232,7 @@ export class MetalRatesService {
     const rate = this.rateRepo.create({
       metalType: dto.metalType,
       purity: dto.purity,
-      ratePerGram: dto.ratePerGram,
+      ratePerGram: cleanRate,
       previousRatePerGram: current?.ratePerGram ?? null,
       notes: dto.notes,
       effectiveFrom: dto.effectiveFrom ?? new Date(),
@@ -116,9 +251,84 @@ export class MetalRatesService {
       await this.rateRepo.save(current);
     }
 
+    // Audit log
+    await this.auditService.log({
+      userId: createdById,
+      action: 'RATE_UPDATE',
+      entityName: 'MetalRate',
+      entityId: rate.id,
+      before: current ? { ratePerGram: current.ratePerGram, purity: current.purity, metalType: current.metalType } : undefined,
+      after: { ratePerGram: rate.ratePerGram, purity: rate.purity, metalType: rate.metalType, status: rate.status },
+      notes: dto.notes,
+    });
+
     return {
       success: true,
-      message: autoApprove ? 'Metal rate updated successfully' : 'Metal rate submitted for approval',
+      message: autoApprove ? 'Metal rate updated and activated successfully' : 'Metal rate submitted for approval',
+      data: rate,
+    };
+  }
+
+  // ─── Update an existing rate by ID ─────────────────────────────────────────
+  async updateRate(
+    id: string,
+    dto: { ratePerGram: number; notes?: string; effectiveFrom?: Date },
+    userId: string,
+    userRole: string,
+  ) {
+    const rate = await this.rateRepo.findOne({ where: { id } });
+    if (!rate) throw new NotFoundException(`Metal rate ${id} not found`);
+
+    if (!dto.ratePerGram || isNaN(dto.ratePerGram) || dto.ratePerGram <= 0) {
+      throw new BadRequestException('Rate per gram must be a positive number');
+    }
+
+    const previousRate = rate.ratePerGram;
+    const cleanRate = parseFloat(Number(dto.ratePerGram).toFixed(2));
+
+    const autoApprove = [
+      'SUPER_ADMIN', 'STORE_MANAGER', 'PRICING_MANAGER',
+    ].includes(userRole);
+
+    rate.previousRatePerGram = previousRate;
+    rate.ratePerGram = cleanRate;
+    if (dto.notes) rate.notes = dto.notes;
+    if (dto.effectiveFrom) rate.effectiveFrom = dto.effectiveFrom;
+
+    if (autoApprove) {
+      rate.status = ApprovalStatus.APPROVED;
+      rate.isActive = true;
+      rate.approvedById = userId;
+      rate.approvedAt = new Date();
+
+      // Deactivate any other active rates for this metalType & purity
+      await this.rateRepo
+        .createQueryBuilder()
+        .update(MetalRate)
+        .set({ isActive: false })
+        .where('metalType = :metalType AND purity = :purity AND id != :id AND isActive = true', {
+          metalType: rate.metalType,
+          purity: rate.purity,
+          id: rate.id,
+        })
+        .execute();
+    }
+
+    await this.rateRepo.save(rate);
+
+    await this.auditService.log({
+      userId,
+      action: 'RATE_EDIT',
+      entityName: 'MetalRate',
+      entityId: rate.id,
+      before: { ratePerGram: previousRate },
+      after: { ratePerGram: rate.ratePerGram, notes: rate.notes },
+      notes: dto.notes,
+    });
+
+    return {
+      success: true,
+      message: 'Metal rate updated successfully',
       data: rate,
     };
   }
@@ -145,6 +355,14 @@ export class MetalRatesService {
     rate.approvedAt = new Date();
     await this.rateRepo.save(rate);
 
+    await this.auditService.log({
+      userId: reviewerId,
+      action: 'RATE_APPROVED',
+      entityName: 'MetalRate',
+      entityId: rate.id,
+      after: { ratePerGram: rate.ratePerGram, purity: rate.purity, metalType: rate.metalType },
+    });
+
     return { success: true, message: 'Metal rate approved and activated', data: rate };
   }
 
@@ -160,6 +378,14 @@ export class MetalRatesService {
     rate.approvedById = reviewerId;
     rate.approvedAt = new Date();
     await this.rateRepo.save(rate);
+
+    await this.auditService.log({
+      userId: reviewerId,
+      action: 'RATE_REJECTED',
+      entityName: 'MetalRate',
+      entityId: rate.id,
+      notes: reason,
+    });
 
     return { success: true, message: 'Metal rate rejected', data: rate };
   }

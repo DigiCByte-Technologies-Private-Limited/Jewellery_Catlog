@@ -30,6 +30,7 @@ interface CustomDesignSectionProps {
   onOpenHandScale: () => void;
   onOpenDiamondLab: () => void;
   onAddToCart: () => void;
+  onOpenCustomDesign?: () => void;
 }
 
 export const CustomDesignSection: FC<CustomDesignSectionProps> = ({
@@ -54,6 +55,7 @@ export const CustomDesignSection: FC<CustomDesignSectionProps> = ({
   onOpenHandScale,
   onOpenDiamondLab,
   onAddToCart,
+  onOpenCustomDesign,
 }) => {
   const modelTitles = {
     'solitaire-ring': 'The Imperial Solitaire Royal',
@@ -169,6 +171,17 @@ export const CustomDesignSection: FC<CustomDesignSectionProps> = ({
               <span>Consult Atelier</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
+
+            {onOpenCustomDesign && (
+              <button
+                onClick={onOpenCustomDesign}
+                className="px-5 py-3 rounded-full bg-gradient-to-r from-[#1C1917] to-[#292524] hover:from-[#292524] hover:to-[#1C1917] text-amber-200 hover:text-white border border-amber-500/40 text-xs font-semibold tracking-wider uppercase transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                title="Upload CAD model or sketch for custom piece"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#E2C37A]" />
+                <span>Upload Own Design / CAD</span>
+              </button>
+            )}
 
             <button
               onClick={onAddToCart}

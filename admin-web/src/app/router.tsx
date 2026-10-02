@@ -16,6 +16,9 @@ import { OldGoldPage } from '../pages/old-gold/OldGoldPage';
 import { BookingsPage } from '../pages/bookings/BookingsPage';
 import { EnquiriesPage } from '../pages/enquiries/EnquiriesPage';
 import { RequestsPage } from '../pages/requests/RequestsPage';
+import { CustomDesignsPage } from '../pages/custom-designs/CustomDesignsPage';
+import { WholesaleSubmissionsPage } from '../pages/wholesale/WholesaleSubmissionsPage';
+import { WholesalePartnersPage } from '../pages/wholesale-partners/WholesalePartnersPage';
 import { CustomersPage } from '../pages/customers/CustomersPage';
 import { StoragePage } from '../pages/storage/StoragePage';
 import { SubscriptionsPage } from '../pages/subscriptions/SubscriptionsPage';
@@ -42,6 +45,9 @@ export const router = createBrowserRouter([
       { path: 'old-gold', element: <OldGoldPage /> },
       { path: 'bookings', element: <BookingsPage /> },
       { path: 'requests', element: <RequestsPage /> },
+      { path: 'custom-designs', element: <CustomDesignsPage /> },
+      { path: 'wholesale-submissions', element: <WholesaleSubmissionsPage /> },
+      { path: 'wholesale-partners', element: <WholesalePartnersPage /> },
       { path: 'enquiries', element: <EnquiriesPage /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'storage', element: <StoragePage /> },

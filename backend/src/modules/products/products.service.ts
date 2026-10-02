@@ -56,7 +56,7 @@ export class ProductsService {
     private readonly auditService: AuditService,
   ) {}
 
-  // ─── LIST ─────────────────────────────────────────────────────────────────
+  // ─── LIST WITH DYNAMIC PRICING & MULTI-FILTERS ───────────────────────────
   async findAll(query: {
     page?: number;
     limit?: number;
@@ -68,6 +68,12 @@ export class ProductsService {
     hasStones?: boolean;
     audience?: string;
     occasion?: string;
+    minWeight?: number;
+    maxWeight?: number;
+    weightRange?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    priceRange?: string;
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
   }) {
@@ -86,14 +92,35 @@ export class ProductsService {
       sortOrder = 'DESC',
     } = query;
 
+    // Weight range parsing
+    let minW = query.minWeight !== undefined ? Number(query.minWeight) : undefined;
+    let maxW = query.maxWeight !== undefined ? Number(query.maxWeight) : undefined;
+    if (query.weightRange) {
+      const wr = query.weightRange.trim();
+      if (wr === '0-5') { minW = 0; maxW = 5; }
+      else if (wr === '5-10') { minW = 5; maxW = 10; }
+      else if (wr === '10-20') { minW = 10; maxW = 20; }
+      else if (wr === '20-50') { minW = 20; maxW = 50; }
+      else if (wr === '50+' || wr.startsWith('50')) { minW = 50; }
+    }
+
+    // Price range parsing
+    let minP = query.minPrice !== undefined ? Number(query.minPrice) : undefined;
+    let maxP = query.maxPrice !== undefined ? Number(query.maxPrice) : undefined;
+    if (query.priceRange) {
+      const pr = query.priceRange.trim();
+      if (pr === 'under-25k' || pr === '0-25k') { minP = 0; maxP = 25000; }
+      else if (pr === '25k-50k') { minP = 25000; maxP = 50000; }
+      else if (pr === '50k-100k') { minP = 50000; maxP = 100000; }
+      else if (pr === '100k+' || pr === 'above-100k' || pr.startsWith('100k')) { minP = 100000; }
+    }
+
     const qb = this.productRepo
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.category', 'category')
-      .leftJoinAndSelect('p.media', 'media', 'media.isPrimary = true')
-      .where('p.deletedAt IS NULL')
-      .skip((page - 1) * limit)
-      .take(limit)
-      .orderBy(`p.${sortBy}`, sortOrder);
+      .leftJoinAndSelect('p.media', 'media')
+      .leftJoinAndSelect('p.stones', 'stones')
+      .where('p.deletedAt IS NULL');
 
     if (search) {
       qb.andWhere('(LOWER(p.name) LIKE :search OR LOWER(p.sku) LIKE :search)', {
@@ -107,23 +134,121 @@ export class ProductsService {
     if (hasStones !== undefined) qb.andWhere('p.hasStones = :hasStones', { hasStones });
     if (audience) qb.andWhere('p.audience = :audience', { audience });
     if (occasion) qb.andWhere('p.occasion = :occasion', { occasion });
+    if (minW !== undefined) qb.andWhere('p.grossWeight >= :minW', { minW });
+    if (maxW !== undefined) qb.andWhere('p.grossWeight <= :maxW', { maxW });
+
+    // Fetch active metal rates once for dynamic calculation across all products
+    const ratesRes = await this.metalRatesService.getLatestRates();
+    const ratesMap = new Map<string, any>();
+    for (const r of ratesRes.data || []) {
+      ratesMap.set(`${r.metalType}_${r.purity}`, r);
+    }
+
+    // Dynamic price filtering or price sorting requires in-memory calculation
+    if (minP !== undefined || maxP !== undefined || sortBy === 'price') {
+      const allCandidates = await qb.getMany();
+      let enriched = allCandidates.map((p) => this._enrichProductWithPrice(p, ratesMap));
+
+      if (minP !== undefined) enriched = enriched.filter((p) => p.currentPrice >= minP!);
+      if (maxP !== undefined) enriched = enriched.filter((p) => p.currentPrice <= maxP!);
+
+      if (sortBy === 'price') {
+        enriched.sort((a, b) =>
+          sortOrder === 'ASC' ? a.currentPrice - b.currentPrice : b.currentPrice - a.currentPrice,
+        );
+      } else {
+        enriched.sort((a: any, b: any) => {
+          const valA = a[sortBy] ?? '';
+          const valB = b[sortBy] ?? '';
+          if (sortOrder === 'ASC') return valA > valB ? 1 : -1;
+          return valA < valB ? 1 : -1;
+        });
+      }
+
+      const total = enriched.length;
+      const paginatedData = enriched.slice((page - 1) * limit, page * limit);
+      return {
+        success: true,
+        data: paginatedData,
+        meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+      };
+    }
+
+    // Standard SQL pagination when no price filter is applied
+    qb.skip((page - 1) * limit)
+      .take(limit)
+      .orderBy(`p.${sortBy}`, sortOrder);
 
     const [data, total] = await qb.getManyAndCount();
+    const enrichedData = data.map((p) => this._enrichProductWithPrice(p, ratesMap));
+
     return {
       success: true,
-      data,
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      data: enrichedData,
+      meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     };
   }
 
-  // ─── GET ONE ──────────────────────────────────────────────────────────────
+  // ─── GET ONE WITH CURRENT DYNAMIC PRICE ────────────────────────────────────
   async findOne(id: string) {
     const product = await this.productRepo.findOne({
       where: { id },
       relations: { category: true, stones: true, media: true },
     });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
-    return { success: true, data: product };
+
+    const ratesRes = await this.metalRatesService.getLatestRates();
+    const ratesMap = new Map<string, any>();
+    for (const r of ratesRes.data || []) {
+      ratesMap.set(`${r.metalType}_${r.purity}`, r);
+    }
+
+    const enriched = this._enrichProductWithPrice(product, ratesMap);
+    return { success: true, data: enriched };
+  }
+
+  // ─── PRIVATE HELPER: DYNAMIC PRICE ENRICHMENT ─────────────────────────────
+  private _enrichProductWithPrice(product: Product, ratesMap: Map<string, any>) {
+    const rate = ratesMap.get(`${product.metalType}_${product.purity}`);
+    const metalRatePerGram = rate ? Number(rate.ratePerGram) : 0;
+
+    const totalStoneValue = (product.stones || []).reduce(
+      (sum: number, s: ProductStone) => sum + Number(s.totalStonePrice || 0),
+      0,
+    );
+
+    const breakdown = this.pricingService.calculate({
+      pricingMode: product.pricingMode,
+      fixedPrice: product.fixedPrice ? Number(product.fixedPrice) : undefined,
+      grossWeight: Number(product.grossWeight),
+      stoneWeight: product.hasStones ? Number(product.stoneWeight ?? 0) : 0,
+      lacWeight: Number(product.lacWeight ?? 0),
+      metalRatePerGram,
+      wastagePercent: product.wastagePercent ? Number(product.wastagePercent) : 0,
+      makingChargeType: product.makingChargeType ?? undefined,
+      makingChargeValue: product.makingChargeValue ? Number(product.makingChargeValue) : 0,
+      majuriType: product.majuriType ?? undefined,
+      majuriValue: product.majuriValue ? Number(product.majuriValue) : 0,
+      serviceCharges: product.serviceCharges ? Number(product.serviceCharges) : 0,
+      totalStoneValue,
+      gstRatePercent: 3,
+      roundTo: 1,
+    });
+
+    return {
+      ...product,
+      currentPrice: breakdown.finalPriceRounded,
+      calculatedPrice: breakdown.finalPriceRounded,
+      priceBreakdown: breakdown,
+      metalRate: rate
+        ? {
+            ratePerGram: Number(rate.ratePerGram),
+            purity: rate.purity,
+            metalType: rate.metalType,
+            updatedAt: rate.updatedAt,
+          }
+        : null,
+    };
   }
 
   // ─── CREATE ───────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import {
   requestsApi,
   type ProductRequestItem,
   type RequestHistoryItem,
+  type WholesalePartnerItem,
 } from '../../api/requests.api';
 import { type StoreItem } from '../../api/stores.api';
 import { Modal } from '../../components/ui/Modal';
@@ -35,6 +36,8 @@ import {
   ShoppingBag,
   Send,
   AlertTriangle,
+  ShieldCheck,
+  Search,
 } from 'lucide-react';
 
 interface RequestDetailModalProps {
@@ -59,8 +62,14 @@ export function RequestDetailModal({
   const [activeTab, setActiveTab] = useState<'workflow' | 'assignment' | 'history'>('workflow');
 
   // Assign store dialog state
+  const [assignmentChannel, setAssignmentChannel] = useState<'STORE' | 'PARTNER'>('STORE');
   const [selectedStoreToAssign, setSelectedStoreToAssign] = useState<StoreItem | null>(null);
   const [assignmentNote, setAssignmentNote] = useState('');
+
+  // Wholesale Partner Assignment state
+  const [selectedPartnerToAssign, setSelectedPartnerToAssign] = useState<WholesalePartnerItem | null>(null);
+  const [partnerAssignmentNote, setPartnerAssignmentNote] = useState('');
+  const [partnerSearch, setPartnerSearch] = useState('');
 
   // Store Follow-up state
   const [followUpNote, setFollowUpNote] = useState('');
@@ -107,6 +116,34 @@ export function RequestDetailModal({
 
   const nearbyStores: StoreItem[] = nearbyStoresResponse || [];
 
+  // 3. Fetch Registered Wholesale Partners
+  const { data: wholesalePartnersResponse, isLoading: isPartnersLoading, refetch: refetchPartners } = useQuery({
+    queryKey: ['wholesale-partners-list'],
+    queryFn: async () => {
+      const res = await requestsApi.getWholesalePartners();
+      return res.data?.data || [];
+    },
+    enabled: isOpen,
+  });
+
+  const wholesalePartners: WholesalePartnerItem[] = wholesalePartnersResponse || [];
+
+  const assignedPartner = wholesalePartners.find(
+    (p) => p.userId === request?.assignedToUserId
+  );
+
+  const filteredPartners = wholesalePartners.filter((p) => {
+    if (!partnerSearch.trim()) return true;
+    const q = partnerSearch.toLowerCase();
+    return (
+      p.companyName?.toLowerCase().includes(q) ||
+      p.fullName?.toLowerCase().includes(q) ||
+      p.city?.toLowerCase().includes(q) ||
+      p.state?.toLowerCase().includes(q) ||
+      p.gstNumber?.toLowerCase().includes(q)
+    );
+  });
+
   // Invalidate query helper
   const handleActionSuccess = (msg: string) => {
     queryClient.invalidateQueries({ queryKey: ['product-requests'] });
@@ -114,6 +151,7 @@ export function RequestDetailModal({
     queryClient.invalidateQueries({ queryKey: ['requests-stats'] });
     refetchRequest();
     refetchNearby();
+    refetchPartners();
     onUpdated?.();
     toast({
       type: 'success',
@@ -139,6 +177,27 @@ export function RequestDetailModal({
         type: 'error',
         title: 'Assignment Failed',
         message: err.response?.data?.message || 'Could not assign store.',
+      });
+    },
+  });
+
+  // Mutation 1B: Assign Wholesale Partner
+  const assignPartnerMutation = useMutation({
+    mutationFn: (data: { partnerUserId: string; note?: string }) => {
+      if (!request) throw new Error('No request');
+      return requestsApi.assignPartner(request.id, data.partnerUserId, data.note);
+    },
+    onSuccess: () => {
+      setSelectedPartnerToAssign(null);
+      setPartnerAssignmentNote('');
+      handleActionSuccess('Customer request assigned to Wholesale Partner successfully.');
+      setActiveTab('workflow');
+    },
+    onError: (err: any) => {
+      toast({
+        type: 'error',
+        title: 'Assignment Failed',
+        message: err.response?.data?.message || 'Could not assign wholesale partner.',
       });
     },
   });
@@ -334,8 +393,8 @@ export function RequestDetailModal({
                 }`}
               >
                 <Store className="w-3.5 h-3.5" />
-                Nearby Stores & Assignment
-                {!request.assignedStoreId && (
+                Showroom & Wholesale Assignment
+                {!request.assignedStoreId && !request.assignedToUserId && (
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                 )}
               </button>
@@ -468,15 +527,37 @@ export function RequestDetailModal({
                   )}
                 </div>
 
-                {/* Assigned Store Banner / Quick Switch */}
-                <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between">
+                {/* Assigned Destination Banner / Quick Switch */}
+                <div
+                  className={`p-3 rounded-lg border flex items-center justify-between ${
+                    request.assignedStore
+                      ? 'border-blue-200 bg-blue-50/50'
+                      : assignedPartner || request.assignedToUserId
+                      ? 'border-emerald-200 bg-emerald-50/50'
+                      : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center shrink-0">
-                      <Store className="w-5 h-5" />
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        request.assignedStore
+                          ? 'bg-blue-100 text-blue-800'
+                          : assignedPartner || request.assignedToUserId
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {assignedPartner || request.assignedToUserId ? (
+                        <Building2 className="w-5 h-5" />
+                      ) : (
+                        <Store className="w-5 h-5" />
+                      )}
                     </div>
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                        Assigned Showroom
+                        {assignedPartner || request.assignedToUserId
+                          ? 'Assigned Wholesale Partner'
+                          : 'Assigned Showroom'}
                       </div>
                       {request.assignedStore ? (
                         <div className="font-bold text-slate-900 text-xs">
@@ -485,10 +566,34 @@ export function RequestDetailModal({
                             {request.assignedStore.city}, {request.assignedStore.state}
                           </span>
                         </div>
+                      ) : assignedPartner ? (
+                        <div className="font-bold text-slate-900 text-xs">
+                          {assignedPartner.companyName} —{' '}
+                          <span className="text-emerald-700 font-medium">
+                            {assignedPartner.city ? `${assignedPartner.city}, ` : ''}
+                            {assignedPartner.state || ''}
+                          </span>{' '}
+                          <span className="font-normal text-slate-600">
+                            ({assignedPartner.fullName} · {assignedPartner.phone})
+                          </span>
+                        </div>
+                      ) : request.assignedToUserId ? (
+                        <div className="font-bold text-slate-900 text-xs">
+                          Partner Account ID:{' '}
+                          <span className="font-mono text-emerald-700">
+                            {request.assignedToUserId}
+                          </span>
+                        </div>
                       ) : (
                         <div className="font-bold text-amber-800 text-xs flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                           Not Assigned Yet (Action Needed)
+                        </div>
+                      )}
+                      {request.adminNotes && (
+                        <div className="text-[11px] text-slate-600 mt-0.5">
+                          <span className="font-semibold text-slate-700">Admin Notes: </span>
+                          {request.adminNotes}
                         </div>
                       )}
                     </div>
@@ -496,11 +601,17 @@ export function RequestDetailModal({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                    className={`text-xs ${
+                      assignedPartner || request.assignedToUserId
+                        ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                        : 'border-blue-300 text-blue-700 hover:bg-blue-50'
+                    }`}
                     onClick={() => setActiveTab('assignment')}
                   >
                     <Navigation className="w-3 h-3 mr-1" />
-                    {request.assignedStore ? 'Reassign Nearby Store' : 'Assign Nearby Store'}
+                    {request.assignedStore || request.assignedToUserId
+                      ? 'Reassign / Route Lead'
+                      : 'Assign Store or Partner'}
                   </Button>
                 </div>
 
@@ -796,163 +907,388 @@ export function RequestDetailModal({
                   </span>
                 </div>
 
-                {/* Showroom Ranking List */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <Store className="w-3.5 h-3.5 text-blue-600" />
-                      Nearby Showrooms Ranked by Distance
-                    </h4>
-                    {isNearbyLoading && (
-                      <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
-                        <Clock className="w-3 h-3 animate-spin" /> Calculating proximity...
-                      </span>
+                {/* Channel Switcher */}
+                <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignmentChannel('STORE');
+                      setSelectedPartnerToAssign(null);
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-bold transition-all ${
+                      assignmentChannel === 'STORE'
+                        ? 'bg-white text-blue-700 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Store className="w-4 h-4 text-blue-600" />
+                    <span>Physical Showrooms ({nearbyStores.length})</span>
+                    {request.assignedStoreId && (
+                      <span className="w-2 h-2 rounded-full bg-blue-600" />
                     )}
-                  </div>
-
-                  <div className="space-y-2">
-                    {nearbyStores.map((store, idx) => {
-                      const isAssigned = request.assignedStoreId === store.id;
-                      const isSelected = selectedStoreToAssign?.id === store.id;
-
-                      return (
-                        <div
-                          key={store.id}
-                          className={`p-3 rounded-lg border transition-all ${
-                            isAssigned
-                              ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
-                              : isSelected
-                              ? 'border-amber-500 bg-amber-50/40 ring-1 ring-amber-400'
-                              : 'border-slate-200 bg-white hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span
-                                className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 font-mono ${
-                                  idx === 0
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                    : 'bg-slate-100 text-slate-600'
-                                }`}
-                              >
-                                {idx + 1}
-                              </span>
-                              <div className="min-w-0">
-                                <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                                  <span className="truncate">{store.name}</span>
-                                  {isAssigned && (
-                                    <span className="px-1.5 py-0.2 bg-blue-600 text-white rounded text-[10px] font-bold">
-                                      CURRENTLY ASSIGNED
-                                    </span>
-                                  )}
-                                  {idx === 0 && !isAssigned && (
-                                    <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold">
-                                      NEAREST
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                                  <span className="truncate">{store.address}</span>
-                                  <span>·</span>
-                                  <span className="font-mono text-emerald-700">{store.phone}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="text-right">
-                                <div className="text-xs font-mono font-bold text-slate-900">
-                                  {store.distanceKm !== undefined
-                                    ? `${store.distanceKm} km`
-                                    : store.distanceLabel || 'Approx. Distance'}
-                                </div>
-                                <div className="text-[10px] text-slate-400">
-                                  {store.city}, {store.state}
-                                </div>
-                              </div>
-
-                              {isAssigned ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled
-                                  className="text-xs py-1 px-2.5 h-7 border-blue-300 text-blue-700 bg-blue-50"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Assigned
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  onClick={() => setSelectedStoreToAssign(store)}
-                                  className="text-xs py-1 px-2.5 h-7 bg-amber-600 hover:bg-amber-700 text-white"
-                                >
-                                  <Navigation className="w-3 h-3 mr-1" />
-                                  {request.assignedStoreId ? 'Reassign' : 'Assign Store'}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignmentChannel('PARTNER');
+                      setSelectedStoreToAssign(null);
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-bold transition-all ${
+                      assignmentChannel === 'PARTNER'
+                        ? 'bg-white text-emerald-800 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Building2 className="w-4 h-4 text-emerald-600" />
+                    <span>Wholesale Partners ({wholesalePartners.length})</span>
+                    {request.assignedToUserId && (
+                      <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                    )}
+                  </button>
                 </div>
 
-                {/* Assignment Confirmation Box */}
-                {selectedStoreToAssign && (
-                  <div className="p-3.5 rounded-lg border-2 border-amber-400 bg-amber-50/40 space-y-3 mt-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                        <Navigation className="w-4 h-4 text-amber-700" />
-                        Confirm Dispatch to {selectedStoreToAssign.name} (
-                        {selectedStoreToAssign.distanceKm ?? 'N/A'} km)
+                {/* CHANNEL 1: PHYSICAL SHOWROOMS */}
+                {assignmentChannel === 'STORE' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <Store className="w-3.5 h-3.5 text-blue-600" />
+                        Nearby Showrooms Ranked by Distance
+                      </h4>
+                      {isNearbyLoading && (
+                        <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3 animate-spin" /> Calculating proximity...
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      {nearbyStores.map((store, idx) => {
+                        const isAssigned = request.assignedStoreId === store.id;
+                        const isSelected = selectedStoreToAssign?.id === store.id;
+
+                        return (
+                          <div
+                            key={store.id}
+                            className={`p-3 rounded-lg border transition-all ${
+                              isAssigned
+                                ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
+                                : isSelected
+                                ? 'border-amber-500 bg-amber-50/40 ring-1 ring-amber-400'
+                                : 'border-slate-200 bg-white hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span
+                                  className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 font-mono ${
+                                    idx === 0
+                                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  {idx + 1}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                                    <span className="truncate">{store.name}</span>
+                                    {isAssigned && (
+                                      <span className="px-1.5 py-0.2 bg-blue-600 text-white rounded text-[10px] font-bold">
+                                        CURRENTLY ASSIGNED
+                                      </span>
+                                    )}
+                                    {idx === 0 && !isAssigned && (
+                                      <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold">
+                                        NEAREST
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                                    <span className="truncate">{store.address}</span>
+                                    <span>·</span>
+                                    <span className="font-mono text-emerald-700">{store.phone}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 shrink-0">
+                                <div className="text-right">
+                                  <div className="text-xs font-mono font-bold text-slate-900">
+                                    {store.distanceKm !== undefined
+                                      ? `${store.distanceKm} km`
+                                      : store.distanceLabel || 'Approx. Distance'}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400">
+                                    {store.city}, {store.state}
+                                  </div>
+                                </div>
+
+                                {isAssigned ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled
+                                    className="text-xs py-1 px-2.5 h-7 border-blue-300 text-blue-700 bg-blue-50"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Assigned
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => setSelectedStoreToAssign(store)}
+                                    className="text-xs py-1 px-2.5 h-7 bg-amber-600 hover:bg-amber-700 text-white"
+                                  >
+                                    <Navigation className="w-3 h-3 mr-1" />
+                                    {request.assignedStoreId ? 'Reassign' : 'Assign Store'}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Showroom Assignment Confirmation Box */}
+                    {selectedStoreToAssign && (
+                      <div className="p-3.5 rounded-lg border-2 border-amber-400 bg-amber-50/40 space-y-3 mt-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                            <Navigation className="w-4 h-4 text-amber-700" />
+                            Confirm Dispatch to {selectedStoreToAssign.name} (
+                            {selectedStoreToAssign.distanceKm ?? 'N/A'} km)
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSelectedStoreToAssign(null)}
+                            className="text-xs text-slate-500 hover:text-slate-800"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Dispatch Instructions / Assignment Note (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Nearest branch with stock on display. Customer interested in 22K Kundan choker."
+                            value={assignmentNote}
+                            onChange={(e) => setAssignmentNote(e.target.value)}
+                            className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:border-amber-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedStoreToAssign(null)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              assignStoreMutation.mutate({
+                                storeId: selectedStoreToAssign.id,
+                                note: assignmentNote || undefined,
+                              })
+                            }
+                            isLoading={assignStoreMutation.isPending}
+                            className="bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                            Confirm Assignment
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setSelectedStoreToAssign(null)}
-                        className="text-xs text-slate-500 hover:text-slate-800"
-                      >
-                        Cancel
-                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* CHANNEL 2: LOCAL WHOLESALE PARTNERS */}
+                {assignmentChannel === 'PARTNER' && (
+                  <div className="space-y-4">
+                    {/* Search Bar & Header */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="relative flex-1">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Search partners by company name, contact, city, or GST..."
+                          value={partnerSearch}
+                          onChange={(e) => setPartnerSearch(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-300 focus:border-emerald-500 focus:outline-none bg-white"
+                        />
+                      </div>
+                      {isPartnersLoading && (
+                        <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3 animate-spin" /> Loading partners...
+                        </span>
+                      )}
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        Dispatch Instructions / Assignment Note (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Nearest branch with stock on display. Customer interested in 22K Kundan choker."
-                        value={assignmentNote}
-                        onChange={(e) => setAssignmentNote(e.target.value)}
-                        className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:border-amber-500 focus:outline-none"
-                      />
+                    {/* Wholesale Partners List */}
+                    <div className="space-y-2">
+                      {filteredPartners.length === 0 ? (
+                        <div className="p-8 text-center bg-slate-50 rounded-lg border border-slate-200">
+                          <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                          <p className="text-xs font-semibold text-slate-700">No wholesale partners match your filter.</p>
+                          <p className="text-[11px] text-slate-400 mt-1">Partners registered via the wholesale portal appear here.</p>
+                        </div>
+                      ) : (
+                        filteredPartners.map((partner) => {
+                          const isAssigned = request.assignedToUserId === partner.userId;
+                          const isSelected = selectedPartnerToAssign?.userId === partner.userId;
+
+                          return (
+                            <div
+                              key={partner.userId}
+                              className={`p-3 rounded-lg border transition-all ${
+                                isAssigned
+                                  ? 'border-emerald-500 bg-emerald-50/50 shadow-2xs'
+                                  : isSelected
+                                  ? 'border-emerald-500 bg-emerald-50/30 ring-1 ring-emerald-400'
+                                  : 'border-slate-200 bg-white hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
+                                    <Building2 className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                                      <span className="truncate">{partner.companyName}</span>
+                                      {partner.isVerified ? (
+                                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                          <ShieldCheck className="w-3 h-3" /> VERIFIED
+                                        </span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">
+                                          REGISTERED
+                                        </span>
+                                      )}
+                                      {isAssigned && (
+                                        <span className="px-1.5 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold">
+                                          CURRENTLY ASSIGNED
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                                      <span className="font-medium text-slate-700">{partner.fullName}</span>
+                                      <span>·</span>
+                                      <span className="font-mono text-emerald-700">{partner.phone}</span>
+                                      <span>·</span>
+                                      <span>{partner.email}</span>
+                                      {partner.gstNumber && (
+                                        <>
+                                          <span>·</span>
+                                          <span className="font-mono text-slate-600">GST: {partner.gstNumber}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 shrink-0">
+                                  <div className="text-right">
+                                    <div className="text-xs font-bold text-slate-900">
+                                      {partner.city || 'Location unstated'}
+                                    </div>
+                                    {partner.state && (
+                                      <div className="text-[10px] text-slate-400">
+                                        {partner.state}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {isAssigned ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled
+                                      className="text-xs py-1 px-2.5 h-7 border-emerald-300 text-emerald-700 bg-emerald-50"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Assigned
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => setSelectedPartnerToAssign(partner)}
+                                      className="text-xs py-1 px-2.5 h-7 bg-emerald-700 hover:bg-emerald-800 text-white"
+                                    >
+                                      <Send className="w-3 h-3 mr-1" />
+                                      {request.assignedToUserId ? 'Reassign' : 'Assign Partner'}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
 
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedStoreToAssign(null)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          assignStoreMutation.mutate({
-                            storeId: selectedStoreToAssign.id,
-                            note: assignmentNote || undefined,
-                          })
-                        }
-                        isLoading={assignStoreMutation.isPending}
-                        className="bg-amber-600 hover:bg-amber-700 text-white text-xs"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                        Confirm Assignment
-                      </Button>
-                    </div>
+                    {/* Wholesale Partner Assignment Confirmation Box */}
+                    {selectedPartnerToAssign && (
+                      <div className="p-3.5 rounded-lg border-2 border-emerald-400 bg-emerald-50/40 space-y-3 mt-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                            <Building2 className="w-4 h-4 text-emerald-700" />
+                            Confirm Dispatch to {selectedPartnerToAssign.companyName} ({selectedPartnerToAssign.city || 'Wholesale Partner'})
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSelectedPartnerToAssign(null)}
+                            className="text-xs text-slate-500 hover:text-slate-800"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Dispatch Instructions / Wholesale Lead Note (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. High value wholesale inquiry for 22K Kundan necklace set. Please prioritize outreach."
+                            value={partnerAssignmentNote}
+                            onChange={(e) => setPartnerAssignmentNote(e.target.value)}
+                            className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:border-emerald-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedPartnerToAssign(null)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              assignPartnerMutation.mutate({
+                                partnerUserId: selectedPartnerToAssign.userId,
+                                note: partnerAssignmentNote || undefined,
+                              })
+                            }
+                            isLoading={assignPartnerMutation.isPending}
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                            Confirm Partner Assignment
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

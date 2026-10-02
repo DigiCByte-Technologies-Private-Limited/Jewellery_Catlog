@@ -24,6 +24,7 @@ import {
   StorePurchaseOutcomeDto,
 } from './dto/product-request.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/enums';
@@ -37,14 +38,27 @@ export class RequestsController {
   ) {}
 
   /**
-   * 1. Public Endpoint: Customer submits inquiry from website
+   * 1. Public / Authenticated: Customer submits inquiry from website
    */
   @Post()
+  @UseGuards(OptionalJwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Submit customer product inquiry (Public)' })
+  @ApiOperation({ summary: 'Submit customer product inquiry (Public or Authenticated)' })
   @ApiResponse({ status: 201, description: 'Inquiry registered with unique Request ID' })
-  createInquiry(@Body() dto: CreateProductRequestDto) {
-    return this.requestsService.create(dto);
+  createInquiry(@Body() dto: CreateProductRequestDto, @Req() req?: any) {
+    const customerId = req?.user?.id || null;
+    return this.requestsService.create(dto, customerId);
+  }
+
+  /**
+   * 1.1 Customer Endpoint: Retrieve own submitted requests
+   */
+  @Get('my')
+  @ApiBearerAuth('JWT')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Customer gets their own inquiries' })
+  findMyRequests(@Req() req: any) {
+    return this.requestsService.findMyRequests(req.user.id);
   }
 
   /**

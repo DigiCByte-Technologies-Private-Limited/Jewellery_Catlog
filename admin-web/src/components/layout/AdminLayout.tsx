@@ -4,6 +4,9 @@ import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { metalRatesApi } from '../../api/metal-rates.api';
 import { requestsApi } from '../../api/requests.api';
+import { customDesignsApi } from '../../api/custom-designs.api';
+import { wholesaleApi } from '../../api/wholesale.api';
+import { wholesalePartnersApi } from '../../api/wholesale-partners.api';
 import {
   LayoutDashboard,
   Gem,
@@ -12,6 +15,7 @@ import {
   CheckSquare,
   Users,
   ShieldAlert,
+  ShieldCheck,
   LogOut,
   Sparkles,
   Boxes,
@@ -24,6 +28,7 @@ import {
   CreditCard,
   MessageSquareQuote,
   Bell,
+  FileImage,
 } from 'lucide-react';
 
 export function AdminLayout() {
@@ -50,6 +55,36 @@ export function AdminLayout() {
     refetchInterval: 15000, // refresh every 15 seconds
   });
 
+  // Custom design requests stats for notification badge
+  const { data: customDesignStats } = useQuery({
+    queryKey: ['custom-designs-stats', 'badge'],
+    queryFn: async () => {
+      const res = await customDesignsApi.getStats();
+      return res.data?.data;
+    },
+    refetchInterval: 15000, // refresh every 15 seconds
+  });
+
+  // Wholesale product proposals stats for notification badge
+  const { data: wholesaleStats } = useQuery({
+    queryKey: ['wholesale-submissions-stats', 'badge'],
+    queryFn: async () => {
+      const res = await wholesaleApi.getStats();
+      return res.data?.data;
+    },
+    refetchInterval: 15000, // refresh every 15 seconds
+  });
+
+  // Wholesale partner applications stats for notification badge
+  const { data: partnerAppStats } = useQuery({
+    queryKey: ['wholesale-partner-apps-stats', 'badge'],
+    queryFn: async () => {
+      const res = await wholesalePartnersApi.getAll({ limit: 1 });
+      return res.stats;
+    },
+    refetchInterval: 15000,
+  });
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -72,6 +107,24 @@ export function AdminLayout() {
       path: '/requests',
       icon: MessageSquareQuote,
       badge: requestStats?.new,
+    },
+    {
+      label: 'Custom Designs',
+      path: '/custom-designs',
+      icon: Sparkles,
+      badge: customDesignStats?.new,
+    },
+    {
+      label: 'Wholesale Proposals',
+      path: '/wholesale-submissions',
+      icon: FileImage,
+      badge: wholesaleStats?.pendingReview,
+    },
+    {
+      label: 'Wholesale Accounts',
+      path: '/wholesale-partners',
+      icon: ShieldCheck,
+      badge: partnerAppStats?.pendingReview,
     },
     { label: 'Physical Stock', path: '/inventory', icon: Boxes },
     { label: 'Karigar / Job-Work', path: '/karigar', icon: Hammer },

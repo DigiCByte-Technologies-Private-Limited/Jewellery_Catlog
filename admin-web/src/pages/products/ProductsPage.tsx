@@ -35,6 +35,8 @@ export function ProductsPage() {
 
   const [search, setSearch] = useState('');
   const [metalType, setMetalType] = useState('');
+  const [purity, setPurity] = useState('');
+  const [weightRange, setWeightRange] = useState('');
   const [status, setStatus] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [currentPage, setCurrentPage] = useState(1);
@@ -43,11 +45,13 @@ export function ProductsPage() {
 
   // Queries
   const { data: response, isLoading } = useQuery({
-    queryKey: ['products', search, metalType, status, currentPage, itemsPerPage],
+    queryKey: ['products', search, metalType, purity, weightRange, status, currentPage, itemsPerPage],
     queryFn: async () => {
       const res = await productsApi.getAll({
         search: search || undefined,
         metalType: metalType || undefined,
+        purity: purity || undefined,
+        weightRange: weightRange || undefined,
         status: status || undefined,
         page: currentPage,
         limit: itemsPerPage,
@@ -235,20 +239,27 @@ export function ProductsPage() {
     {
       header: 'Pricing Benchmark',
       cell: (r: any) => {
+        const livePrice = r.currentPrice ? Number(r.currentPrice) : null;
         const estNet = Number(r.netMetalWeight || r.grossWeight || 0);
-        const approxPrice = Math.round(estNet * gold22Rate * 1.15 * 1.03);
+        const approxPrice = livePrice || Math.round(estNet * gold22Rate * 1.15 * 1.03);
         return (
           <div className="text-xs">
             {r.pricingMode === 'FIXED' ? (
-              <span className="font-mono font-bold text-slate-800">
-                ₹{Number(r.fixedPrice || 0).toLocaleString('en-IN')} (Fixed)
-              </span>
+              <div>
+                <span className="font-mono font-bold text-slate-800">
+                  ₹{Number(r.fixedPrice || 0).toLocaleString('en-IN')}
+                </span>
+                <div className="text-[10px] text-slate-400 font-sans">Fixed Price</div>
+              </div>
             ) : (
               <div className="font-mono">
-                <span className="font-bold text-amber-950">
-                  ~₹{approxPrice.toLocaleString('en-IN')}
+                <span className="font-bold text-amber-950 text-sm">
+                  ₹{approxPrice.toLocaleString('en-IN')}
                 </span>
-                <div className="text-[10px] text-slate-400">Dynamic Live Rate</div>
+                <div className="text-[10px] text-emerald-600 font-sans font-medium flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                  Dynamic ({r.metalType} {r.purity})
+                </div>
               </div>
             )}
           </div>
@@ -331,10 +342,11 @@ export function ProductsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {products.map((p: any) => {
           const estNet = Number(p.netMetalWeight || p.grossWeight || 0);
+          const livePrice = p.currentPrice ? Number(p.currentPrice) : null;
           const approxPrice =
             p.pricingMode === 'FIXED'
               ? Number(p.fixedPrice || 0)
-              : Math.round(estNet * gold22Rate * 1.15 * 1.03);
+              : (livePrice || Math.round(estNet * gold22Rate * 1.15 * 1.03));
 
           return (
             <div
@@ -481,6 +493,7 @@ export function ProductsPage() {
               value={metalType}
               onChange={(e) => {
                 setMetalType(e.target.value);
+                setPurity('');
                 setCurrentPage(1);
               }}
               options={[
@@ -492,7 +505,64 @@ export function ProductsPage() {
             />
           </div>
 
-          <div className="w-40">
+          <div className="w-36">
+            <Select
+              value={purity}
+              onChange={(e) => {
+                setPurity(e.target.value);
+                setCurrentPage(1);
+              }}
+              options={
+                metalType === 'GOLD'
+                  ? [
+                      { label: 'All Gold Purities', value: '' },
+                      { label: '24K (999)', value: 'K24' },
+                      { label: '22K (916)', value: 'K22' },
+                      { label: '18K (750)', value: 'K18' },
+                      { label: '14K (585)', value: 'K14' },
+                    ]
+                  : metalType === 'SILVER'
+                  ? [
+                      { label: 'All Silver Purities', value: '' },
+                      { label: '999 Fine', value: 'SILVER_999' },
+                      { label: '925 Sterling', value: 'SILVER_925' },
+                    ]
+                  : metalType === 'PLATINUM'
+                  ? [
+                      { label: 'All Platinum Purities', value: '' },
+                      { label: '950 Platinum', value: 'PLATINUM_950' },
+                    ]
+                  : [
+                      { label: 'All Purities', value: '' },
+                      { label: 'Gold 24K', value: 'K24' },
+                      { label: 'Gold 22K', value: 'K22' },
+                      { label: 'Gold 18K', value: 'K18' },
+                      { label: 'Silver 999', value: 'SILVER_999' },
+                      { label: 'Silver 925', value: 'SILVER_925' },
+                    ]
+              }
+            />
+          </div>
+
+          <div className="w-36">
+            <Select
+              value={weightRange}
+              onChange={(e) => {
+                setWeightRange(e.target.value);
+                setCurrentPage(1);
+              }}
+              options={[
+                { label: 'All Weights', value: '' },
+                { label: '0 – 5g', value: '0-5' },
+                { label: '5 – 10g', value: '5-10' },
+                { label: '10 – 20g', value: '10-20' },
+                { label: '20 – 50g', value: '20-50' },
+                { label: '50g+', value: '50+' },
+              ]}
+            />
+          </div>
+
+          <div className="w-36">
             <Select
               value={status}
               onChange={(e) => {
@@ -509,12 +579,14 @@ export function ProductsPage() {
             />
           </div>
 
-          {(search || metalType || status) && (
+          {(search || metalType || purity || weightRange || status) && (
             <button
               type="button"
               onClick={() => {
                 setSearch('');
                 setMetalType('');
+                setPurity('');
+                setWeightRange('');
                 setStatus('');
                 setCurrentPage(1);
               }}

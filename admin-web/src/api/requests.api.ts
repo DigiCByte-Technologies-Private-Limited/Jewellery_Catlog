@@ -166,6 +166,32 @@ export const requestsApi = {
       data
     ),
 
+  getWholesalePartners: () =>
+    httpClient.get<{ success: boolean; data: WholesalePartnerItem[] }>('/wholesale/auth/partners'),
+
+  assignPartner: (id: string, partnerUserId: string, adminNotes?: string) =>
+    httpClient.patch<{ success: boolean; message: string; data: ProductRequestItem }>(
+      `/requests/${id}`,
+      {
+        assignedToUserId: partnerUserId,
+        status: 'ASSIGNED',
+        adminNotes: adminNotes || undefined,
+      }
+    ),
+
   remove: (id: string) =>
     httpClient.delete<{ success: boolean; message: string }>(`/requests/${id}`),
 };
+
+export interface WholesalePartnerItem {
+  userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  companyName: string;
+  city?: string;
+  state?: string;
+  businessType?: string;
+  isVerified: boolean;
+  gstNumber?: string;
+}

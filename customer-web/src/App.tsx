@@ -11,9 +11,12 @@ import { Footer } from './components/Footer';
 import { ConsultationModal } from './components/ConsultationModal';
 import { ProductInquiryModal, type InquiryProductContext } from './components/ProductInquiryModal';
 import { TrackRequestModal } from './components/TrackRequestModal';
+import { CustomDesignModal } from './components/CustomDesignModal';
 import { LuxuryCartDrawer, type CartItem } from './components/LuxuryCartDrawer';
 import { HandScaleModal } from './components/HandScaleModal';
 import { DiamondLabModal } from './components/DiamondLabModal';
+import { CustomerAuthModal } from './components/auth/CustomerAuthModal';
+import { useSearchParams } from 'react-router-dom';
 import type {
   MetalType,
   GemType,
@@ -22,6 +25,7 @@ import type {
 } from './components/jewelry-3d/JewelryModel';
 
 export function App() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [currentModel, setCurrentModel] = useState<'solitaire-ring' | 'emerald-ring' | 'solitaire-bracelet'>('solitaire-ring');
   const [metal, setMetal] = useState<MetalType>('yellow-gold');
   const [gem, setGem] = useState<GemType>('diamond');
@@ -37,7 +41,24 @@ export function App() {
   const [isHandScaleOpen, setIsHandScaleOpen] = useState(false);
   const [isDiamondLabOpen, setIsDiamondLabOpen] = useState(false);
   const [isTrackModalOpen, setIsTrackModalOpen] = useState(false);
+  const [isCustomDesignModalOpen, setIsCustomDesignModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
   const [inquiryProduct, setInquiryProduct] = useState<InquiryProductContext | null>(null);
+
+  // Auto-open auth modal if ?auth=login or ?auth=register
+  useEffect(() => {
+    const authQuery = searchParams.get('auth');
+    if (authQuery === 'login' || authQuery === 'register') {
+      setAuthModalTab(authQuery);
+      setIsAuthModalOpen(true);
+    }
+  }, [searchParams]);
+
+  const handleOpenAuth = (tab: 'login' | 'register' = 'login') => {
+    setAuthModalTab(tab);
+    setIsAuthModalOpen(true);
+  };
 
   // Initialize luxury smooth inertial scrolling with Lenis
   useEffect(() => {
@@ -85,7 +106,14 @@ export function App() {
   }, []);
 
   // Lock background smooth scroll when any modal or drawer is active
-  const isAnyModalOpen = isConsultationOpen || isCartOpen || isHandScaleOpen || isDiamondLabOpen || (inquiryProduct !== null);
+  const isAnyModalOpen =
+    isConsultationOpen ||
+    isCartOpen ||
+    isHandScaleOpen ||
+    isDiamondLabOpen ||
+    inquiryProduct !== null ||
+    isCustomDesignModalOpen ||
+    isAuthModalOpen;
   useEffect(() => {
     const lenis = (window as any).__lenis;
     if (!lenis) return;
@@ -160,6 +188,8 @@ export function App() {
         onOpenConsultation={() => setIsConsultationOpen(true)}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenTrack={() => setIsTrackModalOpen(true)}
+        onOpenCustomDesign={() => setIsCustomDesignModalOpen(true)}
+        onOpenAuth={handleOpenAuth}
         cartCount={1}
       />
 
@@ -226,6 +256,7 @@ export function App() {
           onOpenHandScale={() => setIsHandScaleOpen(true)}
           onOpenDiamondLab={() => setIsDiamondLabOpen(true)}
           onAddToCart={handleAddCurrentToCart}
+          onOpenCustomDesign={() => setIsCustomDesignModalOpen(true)}
         />
 
         {/* The Savoir-Faire Artisanal Craftsmanship & Press Story */}
@@ -234,6 +265,13 @@ export function App() {
 
       {/* Atelier Footer */}
       <Footer />
+
+      {/* Custom Bespoke Design Request Modal */}
+      <CustomDesignModal
+        isOpen={isCustomDesignModalOpen}
+        onClose={() => setIsCustomDesignModalOpen(false)}
+        onOpenTrack={() => setIsTrackModalOpen(true)}
+      />
 
       {/* Product Commercial & Bespoke Inquiry Modal */}
       <ProductInquiryModal
@@ -282,6 +320,21 @@ export function App() {
         onClose={() => setIsDiamondLabOpen(false)}
         carat={carat}
       />
+
+      {/* Patron Sign In & Registration Modal */}
+      <CustomerAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          if (searchParams.get('auth')) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('auth');
+            setSearchParams(nextParams);
+          }
+        }}
+        defaultTab={authModalTab}
+      />
+
     </div>
   );
 }

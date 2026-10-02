@@ -16,6 +16,7 @@ import {
   Navigation,
 } from 'lucide-react';
 import { requestsApi, type CreateInquiryPayload } from '../api/requests.api';
+import { useCustomerAuthStore } from '../store/authStore';
 
 export interface InquiryProductContext {
   productId?: string;
@@ -36,6 +37,8 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
   onClose,
   product,
 }) => {
+  const { user, customer, isAuthenticated } = useCustomerAuthStore();
+
   const [formData, setFormData] = useState({
     customerName: '',
     email: '',
@@ -60,6 +63,19 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
     requestId: string;
     productName: string;
   } | null>(null);
+
+  React.useEffect(() => {
+    if (isOpen && isAuthenticated) {
+      setFormData((prev) => ({
+        ...prev,
+        customerName: prev.customerName || customer?.fullName || user?.fullName || '',
+        email: prev.email || customer?.email || user?.email || '',
+        phone: prev.phone || customer?.phone || user?.phone || '',
+        city: prev.city || customer?.city || '',
+        state: prev.state || customer?.state || '',
+      }));
+    }
+  }, [isOpen, isAuthenticated, customer, user]);
 
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {

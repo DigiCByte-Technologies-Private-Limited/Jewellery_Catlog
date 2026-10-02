@@ -59,14 +59,15 @@ export class RequestsService {
   }
 
   /**
-   * 1. Public: Customer submits product inquiry from website
+   * 1. Public / Authenticated: Customer submits product inquiry from website
    */
-  async create(dto: CreateProductRequestDto) {
+  async create(dto: CreateProductRequestDto, customerId?: string | null) {
     const requestId = await this.generateRequestId();
 
     const request = this.requestRepo.create({
       ...dto,
       requestId,
+      customerId: customerId || null,
       status: RequestStatus.NEW,
       purchaseStatus: PurchaseStatus.PENDING,
       priority: RequestPriority.NORMAL,
@@ -259,9 +260,32 @@ export class RequestsService {
       }
     }
 
+    // Customer ownership isolation (IDOR protection)
+    if (user && user.role === UserRole.CUSTOMER) {
+      if (request.customerId !== user.id) {
+        throw new ForbiddenException('You only have permission to view your own inquiries');
+      }
+    }
+
     return {
       success: true,
       data: request,
+    };
+  }
+
+  /**
+   * Customer Endpoint: List my own submitted requests
+   */
+  async findMyRequests(customerId: string) {
+    const data = await this.requestRepo.find({
+      where: { customerId },
+      order: { createdAt: 'DESC' },
+      relations: { product: true, assignedStore: true },
+    });
+
+    return {
+      success: true,
+      data,
     };
   }
 

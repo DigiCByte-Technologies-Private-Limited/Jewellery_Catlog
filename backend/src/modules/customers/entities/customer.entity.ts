@@ -1,15 +1,25 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('customers')
 export class Customer {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index({ unique: true })
+  @Column({ type: 'uuid', nullable: true })
+  userId: string | null;
+
   @Column()
   fullName: string;
 
   @Column({ unique: true })
   phone: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  altPhone: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  whatsappNumber: string | null;
 
   @Column({ type: 'varchar', nullable: true })
   email: string | null;
