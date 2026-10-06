@@ -5,7 +5,7 @@ import type {
   GemType,
   DisplayMode,
   ProngStyle,
-} from './jewelry-3d/JewelryModel';
+} from '../types/bespoke';
 
 interface HeroSectionProps {
   currentModel?: 'solitaire-ring' | 'emerald-ring' | 'solitaire-bracelet';
@@ -116,18 +116,18 @@ export const HeroSection = ({
           {/* Eyebrow badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-amber-300/50 text-amber-200 text-xs font-semibold tracking-[0.25em] uppercase backdrop-blur-sm">
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>GENEVA · PARIS HIGH ATELIER</span>
+            <span>HAUTE JOAILLERIE · BESPOKE FINE ATELIER</span>
           </div>
 
           {/* Headline */}
           <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[1.15] text-white drop-shadow-lg text-left">
-            <span className="block">Where Light Becomes</span>
-            <span className="block gold-gradient-text font-bold">A Diamond.</span>
+            <span className="block">Where Pure Light</span>
+            <span className="block gold-gradient-text font-bold">Meets Rare Craft.</span>
           </h1>
 
           {/* Subtitle */}
           <p className="text-white/75 text-sm sm:text-base font-light leading-relaxed drop-shadow text-left">
-            Bespoke fine jewelry from our Geneva & Paris ateliers — handcrafted in 18K gold & platinum 950. Visualize your piece live in 360° before a single stone is set.
+            Discover curated fine jewelry collections handcrafted in pure 18K gold, 22K gold, and platinum 950. From bespoke bridal commissions to everyday modern heirlooms, each piece is brought to life by master goldsmiths.
           </p>
 
           {/* CTA Buttons */}
@@ -153,7 +153,7 @@ export const HeroSection = ({
               onClick={onOpenConsultation}
               className="w-full sm:w-auto px-7 py-4 rounded-full border border-white/40 hover:border-amber-300 text-white hover:text-amber-200 text-xs font-semibold tracking-[0.18em] uppercase transition-all backdrop-blur-md bg-white/10 hover:bg-white/15 cursor-pointer flex items-center justify-center gap-2"
             >
-              <span>PRIVATE CONSULTATION</span>
+              <span>PRIVATE SHOWROOM CONSULTATION</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -162,15 +162,15 @@ export const HeroSection = ({
           <div className="flex flex-wrap items-center gap-6 text-xs text-white/60 font-normal pt-1">
             <div className="flex items-center gap-1.5">
               <Check className="w-4 h-4 text-amber-300" />
-              <span>GIA Certified Diamonds</span>
+              <span>100% GIA Certified Solitaires</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Check className="w-4 h-4 text-amber-300" />
-              <span>Lost-Wax 18K Casting</span>
+              <span>BIS Hallmarked 18K &amp; 22K Gold</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Check className="w-4 h-4 text-amber-300" />
-              <span>Armored Courier Delivery</span>
+              <span>Complimentary Insured Courier</span>
             </div>
           </div>
 

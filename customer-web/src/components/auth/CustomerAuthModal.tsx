@@ -204,8 +204,16 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col rounded-3xl bg-[#FAF8F5] border border-amber-900/20 shadow-2xl text-[#1C1917] overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-md animate-in fade-in duration-300"
+      data-lenis-prevent="true"
+      onWheel={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
+      <div
+        className="relative w-full max-w-xl max-h-[90vh] sm:max-h-[92dvh] flex flex-col rounded-3xl bg-[#FAF8F5] border border-amber-900/20 shadow-2xl text-[#1C1917] overflow-hidden"
+        data-lenis-prevent="true"
+      >
         {/* Luxury subtle ambient glow */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-stone-400/10 rounded-full blur-2xl pointer-events-none" />
@@ -267,7 +275,12 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="relative flex-1 overflow-y-auto px-6 py-5 sm:px-8 space-y-4">
+        <div
+          className="relative flex-1 overflow-y-auto overscroll-contain px-6 py-5 sm:px-8 space-y-4"
+          data-lenis-prevent="true"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {/* Status Banners */}
           {errorMsg && (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 shadow-xs">

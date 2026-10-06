@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Sparkles, Hand, Ruler, Check } from 'lucide-react';
-import type { MetalType, GemType } from './jewelry-3d/JewelryModel';
+import type { MetalType, GemType } from '../types/bespoke';
 
 interface HandScaleModalProps {
   isOpen: boolean;
@@ -56,8 +56,18 @@ export const HandScaleModal = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="relative w-full max-w-2xl rounded-3xl bg-[#FCFBF9] border border-stone-200 p-6 sm:p-8 shadow-2xl text-[#1C1917] overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300"
+      data-lenis-prevent="true"
+      onWheel={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
+      <div
+        className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-[92dvh] overflow-y-auto overscroll-contain rounded-3xl bg-[#FCFBF9] border border-stone-200 p-6 sm:p-8 shadow-2xl text-[#1C1917]"
+        data-lenis-prevent="true"
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
         {/* Background glow */}
         <div className="absolute top-0 right-1/4 w-80 h-80 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
 

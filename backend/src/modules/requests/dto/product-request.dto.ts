@@ -7,6 +7,7 @@ import {
   IsUUID,
   IsNumber,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   RequestStatus,
@@ -212,16 +213,19 @@ export class QueryProductRequestsDto {
 
   @ApiPropertyOptional({ enum: RequestStatus })
   @IsOptional()
+  @Transform(({ value }) => (!value || value === '' ? undefined : value))
   @IsEnum(RequestStatus)
   status?: RequestStatus;
 
   @ApiPropertyOptional({ enum: PurchaseStatus })
   @IsOptional()
+  @Transform(({ value }) => (!value || value === '' ? undefined : value))
   @IsEnum(PurchaseStatus)
   purchaseStatus?: PurchaseStatus;
 
   @ApiPropertyOptional({ enum: RequestPriority })
   @IsOptional()
+  @Transform(({ value }) => (!value || value === '' ? undefined : value))
   @IsEnum(RequestPriority)
   priority?: RequestPriority;
 

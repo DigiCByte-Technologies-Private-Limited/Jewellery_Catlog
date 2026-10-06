@@ -6,7 +6,7 @@ import { HeroSection } from './components/HeroSection';
 import { FeatureHighlights } from './components/FeatureHighlights';
 import { CuratedSpotlight } from './components/CuratedSpotlight';
 import { CustomDesignSection } from './components/CustomDesignSection';
-import { SavoirFaire } from './components/SavoirFaire';
+import { ShowroomAuthenticitySection } from './components/ShowroomAuthenticitySection';
 import { Footer } from './components/Footer';
 import { ConsultationModal } from './components/ConsultationModal';
 import { ProductInquiryModal, type InquiryProductContext } from './components/ProductInquiryModal';
@@ -22,7 +22,7 @@ import type {
   GemType,
   DisplayMode,
   ProngStyle,
-} from './components/jewelry-3d/JewelryModel';
+} from './types/bespoke';
 
 export function App() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -60,6 +60,33 @@ export function App() {
     setIsAuthModalOpen(true);
   };
 
+  const isAnyModalOpen = Boolean(
+    isConsultationOpen ||
+    isCartOpen ||
+    isHandScaleOpen ||
+    isDiamondLabOpen ||
+    isTrackModalOpen ||
+    isCustomDesignModalOpen ||
+    isAuthModalOpen ||
+    inquiryProduct !== null
+  );
+
+  // Freeze background page scroll and pause Lenis when any modal or drawer is open
+  useEffect(() => {
+    const lenis = (window as any).__lenis;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      if (lenis) lenis.stop();
+    } else {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    }
+    return () => {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    };
+  }, [isAnyModalOpen]);
+
   // Initialize luxury smooth inertial scrolling with Lenis
   useEffect(() => {
     const lenis = new Lenis({
@@ -73,7 +100,9 @@ export function App() {
     });
 
     (window as any).__lenis = lenis;
-
+    if (isAnyModalOpen) {
+      lenis.stop();
+    }
     // Smooth navigation for all internal anchor links (#home, #collections, #about, etc.)
     const handleAnchorClick = (e: MouseEvent) => {
       const target = (e.target as HTMLElement).closest('a');
@@ -105,24 +134,6 @@ export function App() {
     };
   }, []);
 
-  // Lock background smooth scroll when any modal or drawer is active
-  const isAnyModalOpen =
-    isConsultationOpen ||
-    isCartOpen ||
-    isHandScaleOpen ||
-    isDiamondLabOpen ||
-    inquiryProduct !== null ||
-    isCustomDesignModalOpen ||
-    isAuthModalOpen;
-  useEffect(() => {
-    const lenis = (window as any).__lenis;
-    if (!lenis) return;
-    if (isAnyModalOpen) {
-      lenis.stop();
-    } else {
-      lenis.start();
-    }
-  }, [isAnyModalOpen]);
 
   // Dynamic price calculation
   const dynamicPrice = (() => {
@@ -233,38 +244,24 @@ export function App() {
           onOpenInquiry={setInquiryProduct}
         />
 
-        {/* Dedicated Bespoke 3D Custom Design Studio Section */}
+        {/* Dedicated Haute Joaillerie Bespoke Atelier Custom Design Commission Section */}
         <CustomDesignSection
-          currentModel={currentModel}
-          onModelChange={setCurrentModel}
-          metal={metal}
-          setMetal={setMetal}
-          gem={gem}
-          setGem={setGem}
-          carat={carat}
-          setCarat={setCarat}
-          engravingText={engravingText}
-          setEngravingText={setEngravingText}
-          engravingFont={engravingFont}
-          setEngravingFont={setEngravingFont}
-          prongStyle={prongStyle}
-          setProngStyle={setProngStyle}
-          displayMode={displayMode}
-          setDisplayMode={setDisplayMode}
-          dynamicPrice={dynamicPrice}
           onOpenConsultation={() => setIsConsultationOpen(true)}
-          onOpenHandScale={() => setIsHandScaleOpen(true)}
-          onOpenDiamondLab={() => setIsDiamondLabOpen(true)}
-          onAddToCart={handleAddCurrentToCart}
-          onOpenCustomDesign={() => setIsCustomDesignModalOpen(true)}
+          onOpenTrackModal={() => setIsTrackModalOpen(true)}
         />
 
-        {/* The Savoir-Faire Artisanal Craftsmanship & Press Story */}
-        <SavoirFaire />
+        {/* Sovereign Assurance & Physical Flagship Showrooms */}
+        <ShowroomAuthenticitySection
+          onOpenConsultation={() => setIsConsultationOpen(true)}
+        />
       </main>
 
       {/* Atelier Footer */}
-      <Footer />
+      <Footer
+        onOpenConsultation={() => setIsConsultationOpen(true)}
+        onOpenTrack={() => setIsTrackModalOpen(true)}
+        onOpenCustomDesign={() => setIsCustomDesignModalOpen(true)}
+      />
 
       {/* Custom Bespoke Design Request Modal */}
       <CustomDesignModal
@@ -286,7 +283,7 @@ export function App() {
         onClose={() => setIsTrackModalOpen(false)}
       />
 
-      {/* 3D Private Consultation Modal */}
+      {/* VIP Showroom Consultation Modal */}
       <ConsultationModal
         isOpen={isConsultationOpen}
         onClose={() => setIsConsultationOpen(false)}

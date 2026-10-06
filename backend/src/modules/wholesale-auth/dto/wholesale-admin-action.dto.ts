@@ -6,7 +6,7 @@ import {
   IsInt,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { WholesaleApplicationStatus, WholesaleDocumentStatus } from '../../../common/enums';
 
@@ -47,11 +47,13 @@ export class AddAdminNoteDto {
 export class WholesaleApplicationFilterDto {
   @ApiPropertyOptional({ enum: WholesaleApplicationStatus })
   @IsOptional()
+  @Transform(({ value }) => (!value || value === '' ? undefined : value))
   @IsEnum(WholesaleApplicationStatus)
   status?: WholesaleApplicationStatus;
 
   @ApiPropertyOptional({ example: 'ABC Jewellers' })
   @IsOptional()
+  @Transform(({ value }) => (!value || typeof value !== 'string' || value.trim() === '' ? undefined : value.trim()))
   @IsString()
   search?: string;
 

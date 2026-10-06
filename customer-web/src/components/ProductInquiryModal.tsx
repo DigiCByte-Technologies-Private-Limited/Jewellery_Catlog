@@ -64,6 +64,22 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
     productName: string;
   } | null>(null);
 
+  // Freeze background page scroll and pause Lenis smooth scroll when inquiry modal is open
+  React.useEffect(() => {
+    const lenis = (window as any).__lenis;
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      if (lenis) lenis.stop();
+    } else {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    }
+    return () => {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    };
+  }, [isOpen]);
+
   React.useEffect(() => {
     if (isOpen && isAuthenticated) {
       setFormData((prev) => ({
@@ -192,8 +208,16 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col rounded-3xl bg-[#FCFBF9] border border-stone-200 shadow-2xl text-[#1C1917] overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-md animate-in fade-in duration-300"
+      data-lenis-prevent="true"
+      onWheel={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
+      <div
+        className="relative w-full max-w-xl max-h-[90vh] sm:max-h-[92dvh] flex flex-col rounded-3xl bg-[#FCFBF9] border border-stone-200 shadow-2xl text-[#1C1917] overflow-hidden"
+        data-lenis-prevent="true"
+      >
         {/* Subtle decorative glow */}
         <div className="absolute top-0 right-0 w-72 h-72 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -223,7 +247,12 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto flex-grow space-y-5">
+        <div
+          className="p-6 overflow-y-auto flex-grow space-y-5 overscroll-contain"
+          data-lenis-prevent="true"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {submittedData ? (
             /* ── SUCCESS CONFIRMATION SCREEN ── */
             <div className="text-center py-6 px-2 space-y-5">

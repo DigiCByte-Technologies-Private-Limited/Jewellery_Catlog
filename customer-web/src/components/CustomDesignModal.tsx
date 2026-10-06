@@ -60,6 +60,22 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
     additionalNotes: '',
   });
 
+  // Freeze background page scroll and pause Lenis smooth scroll when custom design modal is open
+  React.useEffect(() => {
+    const lenis = (window as any).__lenis;
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      if (lenis) lenis.stop();
+    } else {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    }
+    return () => {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    };
+  }, [isOpen]);
+
   React.useEffect(() => {
     if (isOpen && isAuthenticated) {
       setFormData((prev) => ({
@@ -107,7 +123,7 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
     for (const f of files) {
       const ext = f.name.split('.').pop()?.toLowerCase() || '';
       if (!allowedExts.includes(ext)) {
-        setErrorMsg(`Unsupported file type ".${ext}". Allowed: JPG, PNG, WEBP, PDF, CAD/3D (OBJ, STL, STEP, DWG, DXF, ZIP).`);
+        setErrorMsg(`Unsupported file type ".${ext}". Allowed: JPG, PNG, WEBP, PDF, CAD files & archives (OBJ, STL, STEP, DWG, DXF, ZIP).`);
         return;
       }
       if (f.size > 25 * 1024 * 1024) {
@@ -210,9 +226,15 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-md overflow-y-auto animate-fadeIn">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-md overflow-y-auto animate-fadeIn"
+      data-lenis-prevent="true"
+      onWheel={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
       <div
         className="relative w-full max-w-2xl bg-[#FCFAF7] border border-amber-200/80 rounded-2xl shadow-2xl overflow-hidden my-6"
+        data-lenis-prevent="true"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Luxury Gold Ambient Banner */}
@@ -230,7 +252,7 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
                 Request Custom Design
               </h2>
               <p className="mt-1.5 text-xs sm:text-sm text-stone-600 leading-relaxed max-w-lg">
-                Submit your unique concept, CAD model, or reference sketch. Our master karigars and design atelier will evaluate feasibility and reach out with a 3D blueprint &amp; quotation.
+                Submit your unique concept, CAD model, or reference sketch. Our master karigars and design atelier will evaluate feasibility and reach out with an archival blueprint &amp; quotation.
               </p>
             </div>
             <button
@@ -244,7 +266,12 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
         </div>
 
         {/* Form Body or Success Confirmation */}
-        <div className="p-6 sm:p-8 max-h-[75vh] overflow-y-auto">
+        <div
+          className="p-6 sm:p-8 max-h-[75vh] overflow-y-auto overscroll-contain"
+          data-lenis-prevent="true"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {submittedData ? (
             /* SUCCESS CONFIRMATION STATE */
             <div className="py-6 text-center animate-fadeIn">
@@ -606,7 +633,7 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
                       {isUploadingFiles ? 'Uploading & Encrypting Attachments...' : 'Click or Drag & Drop reference files here'}
                     </span>
                     <span className="text-[11px] text-stone-500 mt-1">
-                      Supports JPG, PNG, PDF, CAD &amp; 3D files (OBJ, STL, DWG, DXF, STEP, ZIP)
+                      Supports JPG, PNG, PDF, CAD &amp; design archives (OBJ, STL, DWG, DXF, STEP, ZIP)
                     </span>
                   </div>
                 </div>

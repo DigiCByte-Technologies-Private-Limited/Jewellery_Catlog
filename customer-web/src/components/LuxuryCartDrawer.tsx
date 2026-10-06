@@ -8,7 +8,7 @@ import {
   AlertTriangle,
   RefreshCw,
 } from 'lucide-react';
-import type { MetalType, GemType, ProngStyle } from './jewelry-3d/JewelryModel';
+import type { MetalType, GemType, ProngStyle } from '../types/bespoke';
 import { productsApi } from '../api/products.api';
 
 export interface CartItem {
@@ -62,6 +62,22 @@ export const LuxuryCartDrawer = ({
     'emerald': 'Colombian Emerald',
     'ruby': 'Burmese Pigeon Blood Ruby',
   };
+
+  // Lock body scroll and pause Lenis smooth scroll while cart drawer is open
+  useEffect(() => {
+    const lenis = (window as any).__lenis;
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      if (lenis) lenis.stop();
+    } else {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    }
+    return () => {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    };
+  }, [isOpen]);
 
   // Automatically validate cart price with authoritative backend whenever drawer opens
   useEffect(() => {
@@ -136,7 +152,7 @@ export const LuxuryCartDrawer = ({
         const snapshot = (res.data as any)?.data;
         setOrderConfirmed(snapshot);
       } else {
-        // 3D custom piece without registered DB SKU
+        // Bespoke custom piece without registered DB SKU
         setTimeout(() => {
           setOrderConfirmed({
             productName: cartItem.title,
@@ -155,15 +171,25 @@ export const LuxuryCartDrawer = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300">
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300"
+      data-lenis-prevent="true"
+      onWheel={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
       {/* Backdrop click to dismiss */}
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Slide-over Drawer */}
-      <div className="relative w-full max-w-md h-full bg-[#FAF8F5] border-l border-stone-200 p-6 sm:p-8 flex flex-col justify-between shadow-2xl z-10 overflow-y-auto text-[#1C1917]">
-        <div>
-          {/* Header */}
-          <div className="flex items-center justify-between pb-5 border-b border-stone-200">
+      <div
+        className="relative w-full max-w-md h-full bg-[#FAF8F5] border-l border-stone-200 flex flex-col justify-between shadow-2xl z-10 text-[#1C1917] overflow-hidden"
+        data-lenis-prevent="true"
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
+        {/* Fixed Header */}
+        <div className="p-5 sm:p-6 pb-4 border-b border-stone-200 shrink-0 bg-[#FAF8F5]">
+          <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] tracking-[0.25em] uppercase text-[#8C6A28] font-bold block">
                 Atelier Clienteling
@@ -183,7 +209,7 @@ export const LuxuryCartDrawer = ({
 
           {/* Metal Rate Drift Alert Banner (Requirement #15) */}
           {priceDriftNotice && (
-            <div className="mt-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-start gap-3 text-xs animate-in slide-in-from-top-2 duration-300 shadow-sm">
+            <div className="mt-3 p-3 rounded-2xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-start gap-2.5 text-xs animate-in slide-in-from-top-2 duration-300 shadow-sm">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold block text-amber-900 mb-0.5">
@@ -193,10 +219,18 @@ export const LuxuryCartDrawer = ({
               </div>
             </div>
           )}
+        </div>
 
+        {/* Scrollable Center Body */}
+        <div
+          className="p-5 sm:p-6 overflow-y-auto flex-1 overscroll-contain space-y-4"
+          data-lenis-prevent="true"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {/* Order Confirmation Screen (Requirement #16 Snapshot) */}
           {orderConfirmed ? (
-            <div className="py-8 text-center space-y-4 animate-in zoom-in-95 duration-300">
+            <div className="py-6 text-center space-y-4 animate-in zoom-in-95 duration-300">
               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto border-2 border-emerald-300">
                 <Check className="w-8 h-8" />
               </div>
@@ -249,7 +283,7 @@ export const LuxuryCartDrawer = ({
             </div>
           ) : (
             /* Configured Item Summary */
-            <div className="py-6 border-b border-stone-200 space-y-4">
+            <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-white border border-stone-200 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
@@ -323,7 +357,7 @@ export const LuxuryCartDrawer = ({
               </div>
 
               {/* White-Glove Inclusions */}
-              <div className="space-y-2 pt-2 text-xs text-stone-600">
+              <div className="space-y-2 pt-1 text-xs text-stone-600">
                 <div className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-[#B89047]" />
                   <span>Complimentary Imperial Bordeaux Velvet Presentation Box</span>
@@ -341,9 +375,9 @@ export const LuxuryCartDrawer = ({
           )}
         </div>
 
-        {/* Footer Actions (hidden if order is confirmed) */}
+        {/* Fixed Footer Actions (hidden if order is confirmed) */}
         {!orderConfirmed && (
-          <div className="pt-6 border-t border-stone-200 space-y-3">
+          <div className="p-5 sm:p-6 pt-4 border-t border-stone-200 space-y-3 shrink-0 bg-[#FAF8F5]">
             <div className="flex justify-between items-baseline">
               <span className="text-xs uppercase tracking-widest text-stone-500 font-medium">
                 Authoritative Payable
@@ -356,7 +390,7 @@ export const LuxuryCartDrawer = ({
             <button
               onClick={handleProceedToCheckout}
               disabled={isCheckingOut}
-              className="w-full py-4 rounded-full bg-[#1C1917] hover:bg-[#8C6A28] text-white font-semibold text-xs tracking-[0.2em] uppercase shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-3.5 sm:py-4 rounded-full bg-[#1C1917] hover:bg-[#8C6A28] text-white font-semibold text-xs tracking-[0.2em] uppercase shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {isCheckingOut ? (
                 <>

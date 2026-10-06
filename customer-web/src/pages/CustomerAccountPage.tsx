@@ -654,7 +654,7 @@ export const CustomerAccountPage: React.FC = () => {
                   Your Bespoke Commissions &amp; CAD Submissions
                 </h3>
                 <p className="text-xs text-stone-500 font-light mt-0.5">
-                  Track 3D modeling, metal casting, gemstone selection, and hallmarking progress.
+                  Track bespoke drafting, metal casting, gemstone selection, and hallmarking progress.
                 </p>
               </div>
               <span className="text-xs font-semibold px-3 py-1 rounded-full bg-stone-200 text-stone-700">
@@ -674,7 +674,7 @@ export const CustomerAccountPage: React.FC = () => {
                   No Bespoke Requests Yet
                 </h4>
                 <p className="text-xs text-stone-500 max-w-sm mx-auto mb-5">
-                  Have an heirloom idea, 3D sketch, or CAD model? Commission a master artisan to bring your vision to life.
+                  Have an heirloom idea, archival sketch, or custom concept? Commission a master artisan to bring your vision to life.
                 </p>
                 <button
                   onClick={() => navigate('/')}

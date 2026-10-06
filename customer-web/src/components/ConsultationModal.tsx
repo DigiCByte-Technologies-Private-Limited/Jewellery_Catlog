@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { X, Calendar, Clock, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface ConsultationModalProps {
@@ -20,11 +20,25 @@ export const ConsultationModal = ({
     email: '',
     phone: '',
     date: '',
-    timeSlot: '14:00 - 15:00 GMT',
+    timeSlot: '14:00 - 15:00 IST',
     notes: '',
   });
 
-  if (!isOpen) return null;
+  // Freeze background page scroll and pause Lenis smooth scroll when consultation modal is open
+  useEffect(() => {
+    const lenis = (window as any).__lenis;
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      if (lenis) lenis.stop();
+    } else {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    }
+    return () => {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    };
+  }, [isOpen]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -34,9 +48,21 @@ export const ConsultationModal = ({
     }, 1000);
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="relative w-full max-w-lg rounded-3xl bg-[#FCFBF9] border border-stone-200 p-6 sm:p-8 shadow-2xl text-[#1C1917] overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300"
+      data-lenis-prevent="true"
+      onWheel={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
+      <div
+        className="relative w-full max-w-lg max-h-[90vh] sm:max-h-[92dvh] overflow-y-auto overscroll-contain rounded-3xl bg-[#FCFBF9] border border-stone-200 p-6 sm:p-8 shadow-2xl text-[#1C1917]"
+        data-lenis-prevent="true"
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
         {/* Background glow */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -55,10 +81,10 @@ export const ConsultationModal = ({
               <span>PRIVATE CONCIERGE</span>
             </div>
             <h3 className="font-serif text-2xl sm:text-3xl font-semibold mb-2 text-[#1C1917]">
-              Bespoke 3D Consultation
+              Bespoke Private Consultation
             </h3>
             <p className="text-xs text-stone-600 mb-6 font-light">
-              Connect 1-on-1 with a master gemologist to customize your ring, inspect GIA stones live in 3D, or commission custom fine jewelry.
+              Connect 1-on-1 with a master gemologist to customize your ring, inspect GIA-certified stones, or commission custom fine jewelry.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -76,7 +102,7 @@ export const ConsultationModal = ({
                 <input
                   type="text"
                   required
-                  placeholder="Lady / Lord Harrington"
+                  placeholder="e.g. Radhika Sharma"
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-amber-500 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-xs"
@@ -91,7 +117,7 @@ export const ConsultationModal = ({
                   <input
                     type="email"
                     required
-                    placeholder="concierge@luxury.com"
+                    placeholder="patron@aurumjewels.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-amber-500 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-xs"
@@ -103,7 +129,7 @@ export const ConsultationModal = ({
                   </label>
                   <input
                     type="tel"
-                    placeholder="+1 (555) 019-2834"
+                    placeholder="+91 98765 43210"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-amber-500 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-xs"
@@ -135,9 +161,9 @@ export const ConsultationModal = ({
                     onChange={(e) => setFormData({ ...formData, timeSlot: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-amber-500 text-xs text-stone-900 focus:outline-none transition-colors shadow-xs"
                   >
-                    <option value="11:00 - 12:00 GMT">11:00 - 12:00 GMT (Morning)</option>
-                    <option value="14:00 - 15:00 GMT">14:00 - 15:00 GMT (Afternoon)</option>
-                    <option value="17:00 - 18:00 GMT">17:00 - 18:00 GMT (Evening)</option>
+                    <option value="11:00 - 12:00 IST">11:00 - 12:00 IST (Morning)</option>
+                    <option value="14:00 - 15:00 IST">14:00 - 15:00 IST (Afternoon)</option>
+                    <option value="17:00 - 18:00 IST">17:00 - 18:00 IST (Evening)</option>
                   </select>
                 </div>
               </div>
@@ -172,7 +198,7 @@ export const ConsultationModal = ({
               Consultation Reserved
             </h3>
             <p className="text-xs text-stone-600 max-w-sm mx-auto font-light leading-relaxed">
-              Thank you, {formData.fullName || 'esteemed patron'}. A private gemologist invitation with a 3D meeting room link has been dispatched to your email.
+              Thank you, {formData.fullName || 'esteemed patron'}. A private gemologist invitation with your appointment dossier has been dispatched to your email.
             </p>
             <button
               onClick={() => {

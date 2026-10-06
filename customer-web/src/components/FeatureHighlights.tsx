@@ -4,23 +4,23 @@ export const FeatureHighlights = () => {
   const features = [
     {
       icon: Gem,
-      title: 'EXTENSIVE RANGE',
-      description: 'Meticulously handcrafted bespoke designs',
+      title: 'THE PERMANENT VAULT',
+      description: 'Rare solitaires & hallmarked gold suites',
     },
     {
       icon: Award,
-      title: 'PRESTIGE SERVICE',
-      description: '1-on-1 private gemologist consultation',
+      title: 'SHOWROOM VIP CONCIERGE',
+      description: '1-on-1 certified gemologist guidance',
     },
     {
       icon: ShieldCheck,
-      title: 'OPTIMAL WARRANTY',
-      description: 'Lifetime authenticity & GIA certified',
+      title: 'HEIRLOOM PROVENANCE',
+      description: 'Individual GIA dossier & BIS hallmarks',
     },
     {
       icon: CreditCard,
-      title: 'ESTEEM FINANCING',
-      description: 'Flexible bespoke payment solutions',
+      title: 'TAILORED ACQUISITIONS',
+      description: 'Structured commission & milestone terms',
     },
   ];
 

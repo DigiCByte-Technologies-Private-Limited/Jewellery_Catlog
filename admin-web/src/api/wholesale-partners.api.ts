@@ -91,8 +91,15 @@ export const wholesalePartnersApi = {
     page?: number;
     limit?: number;
   }): Promise<ListApplicationsResponse> => {
+    const cleanParams: Record<string, any> = {};
+    if (params) {
+      if (params.status) cleanParams.status = params.status;
+      if (params.search && params.search.trim()) cleanParams.search = params.search.trim();
+      if (params.page !== undefined) cleanParams.page = params.page;
+      if (params.limit !== undefined) cleanParams.limit = params.limit;
+    }
     const res = await httpClient.get<ListApplicationsResponse>('/wholesale/admin/applications', {
-      params,
+      params: cleanParams,
     });
     return res.data;
   },

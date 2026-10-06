@@ -12,6 +12,18 @@ httpClient.interceptors.request.use((config) => {
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Filter out empty string query parameters to prevent 400 Bad Request on backend validators
+  if (config.params && typeof config.params === 'object' && !(config.params instanceof URLSearchParams)) {
+    const cleanParams: Record<string, any> = {};
+    for (const [key, value] of Object.entries(config.params)) {
+      if (value !== '' && value !== null && value !== undefined) {
+        cleanParams[key] = value;
+      }
+    }
+    config.params = cleanParams;
+  }
+
   return config;
 });
 

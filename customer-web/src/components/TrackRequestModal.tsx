@@ -23,6 +23,22 @@ export const TrackRequestModal: React.FC<TrackRequestModalProps> = ({ isOpen, on
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Freeze background page scroll and pause Lenis smooth scroll when track modal is open
+  React.useEffect(() => {
+    const lenis = (window as any).__lenis;
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      if (lenis) lenis.stop();
+    } else {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    }
+    return () => {
+      document.body.style.overflow = '';
+      if (lenis) lenis.start();
+    };
+  }, [isOpen]);
   const [result, setResult] = useState<TrackRequestResult | null>(null);
 
   if (!isOpen) return null;
@@ -81,7 +97,12 @@ export const TrackRequestModal: React.FC<TrackRequestModalProps> = ({ isOpen, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      data-lenis-prevent="true"
+      onWheel={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-stone-950/70 backdrop-blur-xs transition-opacity"
@@ -89,9 +110,12 @@ export const TrackRequestModal: React.FC<TrackRequestModalProps> = ({ isOpen, on
       />
 
       {/* Modal Dialog */}
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[92dvh]"
+        data-lenis-prevent="true"
+      >
         {/* Header */}
-        <div className="p-5 border-b border-stone-100 flex items-center justify-between bg-stone-50/60">
+        <div className="p-5 border-b border-stone-100 flex items-center justify-between bg-stone-50/60 shrink-0">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-amber-800">
               Customer Portal
@@ -109,7 +133,12 @@ export const TrackRequestModal: React.FC<TrackRequestModalProps> = ({ isOpen, on
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-5">
+        <div
+          className="p-6 overflow-y-auto overscroll-contain space-y-5 flex-1"
+          data-lenis-prevent="true"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {/* Query Form */}
           <form onSubmit={handleTrack} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

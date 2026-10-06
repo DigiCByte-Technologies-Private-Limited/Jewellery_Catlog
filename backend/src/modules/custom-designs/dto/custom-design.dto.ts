@@ -9,7 +9,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import {
   PreferredContactMethod,
   CustomDesignStatus,
@@ -97,14 +97,17 @@ export class QueryCustomDesignDto {
   search?: string;
 
   @IsOptional()
+  @Transform(({ value }) => (!value || value === '' ? undefined : value))
   @IsEnum(CustomDesignStatus)
   status?: CustomDesignStatus;
 
   @IsOptional()
+  @Transform(({ value }) => (!value || typeof value !== 'string' || value.trim() === '' ? undefined : value.trim()))
   @IsString()
   sortBy?: string = 'createdAt';
 
   @IsOptional()
+  @Transform(({ value }) => (!value || value === '' ? undefined : value))
   @IsEnum(['ASC', 'DESC'])
   sortOrder?: 'ASC' | 'DESC' = 'DESC';
 }

@@ -13,7 +13,7 @@ import {
   Lock,
   CheckCircle2,
 } from 'lucide-react';
-import type { MetalType, GemType } from './jewelry-3d/JewelryModel';
+import type { MetalType, GemType } from '../types/bespoke';
 
 interface BespokeAtelierProps {
   onOpenConsultation: () => void;
@@ -38,7 +38,7 @@ export const BespokeAtelier: FC<BespokeAtelierProps> = ({
       title: 'Private Discovery Session',
       timeline: 'Days 1 – 3',
       description:
-        'Meet one-on-one with a dedicated GIA Graduate Gemologist in our Paris Place Vendôme salon or via secure private video. We establish your design aesthetic, proportions, and personal story.',
+        'Meet one-on-one with a dedicated GIA Graduate Gemologist in our flagship showroom suites or via secure private video. We establish your design aesthetic, proportions, and personal story.',
       icon: Calendar,
     },
     {
@@ -54,7 +54,7 @@ export const BespokeAtelier: FC<BespokeAtelierProps> = ({
       title: 'Gouache Art & Wax Try-On',
       timeline: 'Days 11 – 18',
       description:
-        'Master artists paint a 1:1 scale gouache rendering on archival cardstock. A 3D tactile resin prototype is delivered to your residence for ergonomic fit confirmation before noble metal casting.',
+        'Master artists paint a 1:1 scale gouache rendering on archival cardstock. An ergonomic tactile wax prototype is delivered to your residence for ergonomic fit confirmation before noble metal casting.',
       icon: Award,
     },
     {
