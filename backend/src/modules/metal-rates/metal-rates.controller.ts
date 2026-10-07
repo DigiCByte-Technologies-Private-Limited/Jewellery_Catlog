@@ -58,7 +58,7 @@ export class MetalRatesController {
 
   @Get('history')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get paginated metal rate history with optional filters' })
   getHistory(@Query() query: any) {
     return this.metalRatesService.getHistory({

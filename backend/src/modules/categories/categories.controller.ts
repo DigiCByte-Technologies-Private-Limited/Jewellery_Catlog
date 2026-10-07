@@ -19,20 +19,18 @@ import { UserRole } from '../../common/enums';
 import { CategoriesService } from './categories.service';
 
 @ApiTags('Categories')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get full category tree' })
+  @ApiOperation({ summary: 'Get full category tree (Public)' })
   getTree() {
     return this.categoriesService.getTree();
   }
 
   @Get('flat')
-  @ApiOperation({ summary: 'Get flat paginated category list' })
+  @ApiOperation({ summary: 'Get flat paginated category list (Public)' })
   getFlat(@Query() query: any) {
     return this.categoriesService.getFlat({
       page: query.page ? parseInt(query.page) : 1,
@@ -42,39 +40,43 @@ export class CategoriesController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get single category' })
+  @ApiOperation({ summary: 'Get single category (Public)' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.categoriesService.findOne(id);
   }
 
   @Post()
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.CATALOG_MANAGER)
-  @ApiOperation({ summary: 'Create a new category' })
+  @ApiOperation({ summary: 'Create a new category (Admin)' })
   create(@Body() body: any, @Req() req: any) {
     return this.categoriesService.create(body, req.user.id);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.CATALOG_MANAGER)
-  @ApiOperation({ summary: 'Update a category' })
+  @ApiOperation({ summary: 'Update a category (Admin)' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() body: any, @Req() req: any) {
     return this.categoriesService.update(id, body, req.user.id);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER)
-  @ApiOperation({ summary: 'Soft-delete a category (only if no children)' })
+  @ApiOperation({ summary: 'Soft-delete a category (only if no children) (Admin)' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.categoriesService.remove(id);
   }
 
   @Patch(':id/reorder')
-  @UseGuards(RolesGuard)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.CATALOG_MANAGER)
-  @ApiOperation({ summary: 'Update category sort order' })
+  @ApiOperation({ summary: 'Update category sort order (Admin)' })
   reorder(@Param('id', ParseUUIDPipe) id: string, @Body() body: { sortOrder: number }) {
     return this.categoriesService.reorder(id, body.sortOrder);
   }

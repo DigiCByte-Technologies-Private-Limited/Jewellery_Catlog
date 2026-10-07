@@ -284,6 +284,9 @@ export class ProductsService {
     let majuriType = dto.majuriType;
     if ((majuriType as any) === 'PERCENT') majuriType = MakingChargeType.PERCENTAGE;
 
+    let pricingMode = dto.pricingMode || PricingMode.DYNAMIC;
+    if ((pricingMode as any) === 'DYNAMIC_MARKET') pricingMode = PricingMode.DYNAMIC;
+
     const product = this.productRepo.create({
       ...dto,
       sku,
@@ -293,6 +296,7 @@ export class ProductsService {
       lacWeight,
       makingChargeType,
       majuriType,
+      pricingMode,
       createdById: userId,
       updatedById: userId,
     } as any) as unknown as Product;
@@ -336,6 +340,10 @@ export class ProductsService {
         throw new BadRequestException('Stone weight + lac weight cannot exceed gross weight');
       }
       dto.netMetalWeight = Number(grossWeight) - stoneWeight - lacWeight;
+    }
+
+    if (dto.pricingMode && (dto.pricingMode as any) === 'DYNAMIC_MARKET') {
+      dto.pricingMode = PricingMode.DYNAMIC;
     }
 
     Object.assign(product, { ...dto, updatedById: userId });
