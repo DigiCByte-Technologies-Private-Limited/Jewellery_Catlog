@@ -69,3 +69,38 @@ export function getNewWholesaleSubmissionWhatsAppText(data: WholesaleSubmissionW
     `👉 *Review & Download in Admin Portal:*\n${data.adminPortalLink}`
   );
 }
+
+
+export interface ProductInquiryWhatsAppData {
+  requestId: string;
+  customerName: string;
+  phone: string;
+  email?: string | null;
+  city?: string | null;
+  productName: string;
+  preferredContactMethod?: string | null;
+  message?: string | null;
+  adminPortalLink: string;
+}
+
+export function getNewProductInquiryWhatsAppText(data: ProductInquiryWhatsAppData): string {
+  const emailLine = data.email ? `✉️ *Email:* ${data.email}\n` : '';
+  const cityLine = data.city ? `🏛️ *Showroom / City:* ${data.city}\n` : '';
+  const notesLine = data.message ? `📝 *Notes:* ${data.message.length > 200 ? data.message.substring(0, 197) + '...' : data.message}\n` : '';
+
+  return (
+    `💬 *NEW WHATSAPP PRODUCT EVALUATION INQUIRY*\n` +
+    `----------------------------------------\n` +
+    `📋 *Inquiry ID:* ${data.requestId}\n` +
+    `👤 *Patron:* ${data.customerName}\n` +
+    `📞 *WhatsApp:* ${data.phone}\n` +
+    emailLine +
+    cityLine +
+    `💍 *Creation:* ${data.productName}\n` +
+    `📲 *Channel:* ${data.preferredContactMethod || 'WHATSAPP'}\n` +
+    notesLine +
+    `----------------------------------------\n` +
+    `A patron has registered this piece for WhatsApp evaluation.\n\n` +
+    `👉 *Review & Manage in Admin Portal:*\n${data.adminPortalLink}`
+  );
+}

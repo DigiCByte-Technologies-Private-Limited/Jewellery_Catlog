@@ -11,6 +11,7 @@ import { ProductRequest } from './entities/request.entity';
 import { RequestHistory } from './entities/request-history.entity';
 import { Store } from '../stores/entities/store.entity';
 import { StoresService } from '../stores/stores.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateProductRequestDto,
   UpdateProductRequestDto,
@@ -40,6 +41,7 @@ export class RequestsService {
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
     private readonly storesService: StoresService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -88,6 +90,26 @@ export class RequestsService {
     await this.historyRepo.save(history);
 
     this.logger.log(`Created Product Request ${requestId} for customer ${dto.customerName}`);
+
+    // Asynchronously dispatch Admin Notification Alert (Email + WhatsApp to +91 63039 55998)
+    this.notificationsService
+      .sendNewProductInquiryNotification({
+        requestId: savedRequest.requestId,
+        customerName: dto.customerName,
+        phone: dto.phone,
+        email: dto.email,
+        city: dto.city,
+        state: dto.state,
+        productName: dto.productName,
+        preferredContactMethod: dto.preferredContactMethod || 'WHATSAPP',
+        message: dto.message,
+      })
+      .then((res) => {
+        this.logger.log(`Admin notification alert recorded for ${requestId}: ${res.notificationStatus}`);
+      })
+      .catch((err) => {
+        this.logger.warn(`Failed to dispatch admin notification for ${requestId}: ${err.message}`);
+      });
 
     return {
       success: true,

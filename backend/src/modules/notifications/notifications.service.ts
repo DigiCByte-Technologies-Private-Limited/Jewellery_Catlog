@@ -6,12 +6,16 @@ import {
   CustomDesignEmailData,
   getNewWholesaleSubmissionEmailHtml,
   WholesaleSubmissionEmailData,
+  getNewProductInquiryEmailHtml,
+  ProductInquiryEmailData,
 } from './templates/email-templates';
 import {
   getNewCustomDesignWhatsAppText,
   CustomDesignWhatsAppData,
   getNewWholesaleSubmissionWhatsAppText,
   WholesaleSubmissionWhatsAppData,
+  getNewProductInquiryWhatsAppText,
+  ProductInquiryWhatsAppData,
 } from './templates/whatsapp-templates';
 import {
   WholesaleRegistrationAdminEmailData,
@@ -75,7 +79,7 @@ export class NotificationsService {
   public getAdminWhatsApp(): string {
     return (
       this.configService.get<string>('ADMIN_WHATSAPP_NUMBER') ||
-      '+91 98765 43210'
+      '+91 63039 55998'
     );
   }
 
@@ -520,6 +524,118 @@ export class NotificationsService {
       whatsappSent = true;
     } catch (err: any) {
       whatsappError = err.message;
+    }
+
+    return {
+      emailSent,
+      emailError,
+      whatsappSent,
+      whatsappError,
+      notificationStatus: `${emailSent ? 'EMAIL_SENT' : 'EMAIL_FAILED'}, ${whatsappSent ? 'WHATSAPP_SENT' : 'WHATSAPP_FAILED'}`,
+    };
+  }
+
+  /**
+   * Dispatches Admin notification when a customer submits a Product Inquiry / WhatsApp Evaluation
+   */
+  async sendNewProductInquiryNotification(
+    data: Omit<ProductInquiryEmailData & ProductInquiryWhatsAppData, 'adminPortalLink' | 'submittedAt'>,
+  ): Promise<NotificationResult> {
+    const adminLink = `${this.getAdminWebUrl()}/requests?id=${encodeURIComponent(data.requestId)}`;
+    const submittedAt = new Date().toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+
+    const fullEmailData: ProductInquiryEmailData = {
+      ...data,
+      adminPortalLink: adminLink,
+      submittedAt,
+    };
+
+    const fullWhatsAppData: ProductInquiryWhatsAppData = {
+      ...data,
+      adminPortalLink: adminLink,
+    };
+
+    let emailSent = false;
+    let emailError: string | undefined;
+    let whatsappSent = false;
+    let whatsappError: string | undefined;
+
+    // 1. Email Alert to Admin
+    try {
+      const { subject, html } = getNewProductInquiryEmailHtml(fullEmailData);
+      const adminEmail = this.getAdminEmail();
+      const provider = this.configService.get<string>('EMAIL_PROVIDER') || 'mock';
+
+      if (this.mailTransporter && provider.toLowerCase() === 'smtp') {
+        const fromAddress =
+          this.configService.get<string>('SMTP_FROM') ||
+          '"Aurum Jewels Concierge" <notifications@jewellery.com>';
+        await this.mailTransporter.sendMail({
+          from: fromAddress,
+          to: adminEmail,
+          subject,
+          html,
+        });
+        this.logger.log(`[EMAIL ALERT] Sent inquiry SMTP alert for ${data.requestId} to ${adminEmail}`);
+      } else {
+        this.logger.log(
+          `\n======================================================\n` +
+          `[ADMIN NOTIFICATION: NEW PRODUCT & WHATSAPP EVALUATION INQUIRY]\n` +
+          `To Admin Email: ${adminEmail}\n` +
+          `Inquiry ID: ${data.requestId}\n` +
+          `Customer: ${data.customerName} (${data.phone}, ${data.email || 'N/A'})\n` +
+          `Product: ${data.productName}\n` +
+          `Channel: ${data.preferredContactMethod || 'WHATSAPP'}\n` +
+          `Admin URL: ${adminLink}\n` +
+          `======================================================\n`
+        );
+      }
+      emailSent = true;
+    } catch (err: any) {
+      emailError = err.message;
+      this.logger.error(`Failed sending inquiry email alert: ${err.message}`);
+    }
+
+    // 2. WhatsApp Alert to Admin (+91 63039 55998)
+    try {
+      const adminPhone = this.getAdminWhatsApp();
+      const message = getNewProductInquiryWhatsAppText(fullWhatsAppData);
+      const provider = this.configService.get<string>('WHATSAPP_PROVIDER') || 'mock';
+      const apiUrl = this.configService.get<string>('WHATSAPP_API_URL');
+      const apiToken = this.configService.get<string>('WHATSAPP_TOKEN');
+
+      if ((provider.toLowerCase() === 'meta' || provider.toLowerCase() === 'official') && apiUrl && apiToken) {
+        await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiToken}`,
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: adminPhone.replace(/[^0-9]/g, ''),
+            type: 'text',
+            text: { body: message },
+          }),
+        });
+        this.logger.log(`[WHATSAPP ALERT] Dispatched API message for ${data.requestId} to ${adminPhone}`);
+      } else {
+        this.logger.log(
+          `\n======================================================\n` +
+          `[ADMIN NOTIFICATION: WHATSAPP ALERT DISPATCHED]\n` +
+          `To Admin WhatsApp: ${adminPhone}\n` +
+          message +
+          `\n======================================================\n`
+        );
+      }
+      whatsappSent = true;
+    } catch (err: any) {
+      whatsappError = err.message;
+      this.logger.error(`Failed sending inquiry WhatsApp alert: ${err.message}`);
     }
 
     return {

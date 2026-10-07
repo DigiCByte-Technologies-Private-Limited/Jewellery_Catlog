@@ -281,3 +281,118 @@ export function getNewCustomDesignEmailHtml(data: CustomDesignEmailData): { subj
 
    return { subject, html };
  }
+
+
+export interface ProductInquiryEmailData {
+  requestId: string;
+  customerName: string;
+  phone: string;
+  email?: string | null;
+  city?: string | null;
+  state?: string | null;
+  productName: string;
+  preferredContactMethod?: string | null;
+  message?: string | null;
+  submittedAt: string;
+  adminPortalLink: string;
+}
+
+export function getNewProductInquiryEmailHtml(data: ProductInquiryEmailData): { subject: string; html: string } {
+  const subject = `New Product Inquiry & WhatsApp Evaluation — ${data.requestId}`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${subject}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+    .card { max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    .header { background: linear-gradient(135deg, #104b2b 0%, #062817 100%); padding: 32px 28px; text-align: center; color: #ffffff; }
+    .brand { font-size: 14px; letter-spacing: 0.25em; text-transform: uppercase; color: #d4af37; font-weight: 600; margin-bottom: 8px; }
+    .title { font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+    .badge { display: inline-block; margin-top: 12px; padding: 4px 14px; background: rgba(212, 175, 55, 0.2); border: 1px solid #d4af37; color: #fde68a; border-radius: 9999px; font-size: 13px; font-weight: 600; letter-spacing: 0.05em; font-family: monospace; }
+    .content { padding: 32px 28px; }
+    .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; }
+    .info-grid { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .info-grid td { padding: 8px 0; vertical-align: top; font-size: 14px; line-height: 1.5; }
+    .info-label { width: 36%; color: #64748b; font-weight: 500; }
+    .info-value { width: 64%; color: #0f172a; font-weight: 600; }
+    .box-highlight { background: #f0fdf4; border-left: 4px solid #10b981; padding: 14px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; line-height: 1.6; color: #166534; }
+    .btn-container { text-align: center; margin: 32px 0 16px; }
+    .btn { display: inline-block; background: #104b2b; color: #ffffff !important; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 14px; font-weight: 600; letter-spacing: 0.05em; transition: all 0.2s ease; border: 1px solid #d4af37; }
+    .footer { background: #f8fafc; padding: 20px 28px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="brand">AURUM JEWELS &bull; CLIENTELING CONCIERGE</div>
+      <h1 class="title">Product Evaluation & WhatsApp Inquiry</h1>
+      <div class="badge">${data.requestId}</div>
+    </div>
+    <div class="content">
+      <p style="font-size: 15px; line-height: 1.6; color: #475569; margin-top: 0;">
+        A patron has submitted an inquiry from the customer storefront and initiated a personal WhatsApp evaluation session.
+      </p>
+
+      <div class="section-title">Patron Contact Details</div>
+      <table class="info-grid">
+        <tr>
+          <td class="info-label">Patron Full Name:</td>
+          <td class="info-value">${data.customerName}</td>
+        </tr>
+        <tr>
+          <td class="info-label">WhatsApp Contact:</td>
+          <td class="info-value"><strong style="color: #104b2b;">${data.phone}</strong></td>
+        </tr>
+        ${data.email ? `
+        <tr>
+          <td class="info-label">Email Address:</td>
+          <td class="info-value">${data.email}</td>
+        </tr>` : ''}
+        ${data.city ? `
+        <tr>
+          <td class="info-label">Showroom / City:</td>
+          <td class="info-value">${data.city}${data.state ? `, ${data.state}` : ''}</td>
+        </tr>` : ''}
+        <tr>
+          <td class="info-label">Contact Method:</td>
+          <td class="info-value"><span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${data.preferredContactMethod || 'WHATSAPP'}</span></td>
+        </tr>
+        <tr>
+          <td class="info-label">Submission Timestamp:</td>
+          <td class="info-value" style="font-weight: 400; color: #64748b;">${data.submittedAt}</td>
+        </tr>
+      </table>
+
+      <div class="section-title">Requested Jewelry Piece</div>
+      <table class="info-grid">
+        <tr>
+          <td class="info-label">Creation:</td>
+          <td class="info-value" style="color: #b45309; font-size: 15px;">${data.productName}</td>
+        </tr>
+      </table>
+
+      ${data.message ? `
+      <div class="section-title">Patron Requirements & Evaluation Notes</div>
+      <div class="box-highlight">
+        ${data.message}
+      </div>` : ''}
+
+      <div class="btn-container">
+        <a href="${data.adminPortalLink}" class="btn" target="_blank">Open Inquiry in Admin Portal &rarr;</a>
+      </div>
+    </div>
+    <div class="footer">
+      Aurum Jewels Real-Time Clienteling Alert Engine &bull; Confidential Administrative Notice
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  return { subject, html };
+}

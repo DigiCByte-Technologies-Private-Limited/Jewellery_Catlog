@@ -5,6 +5,7 @@ import { RequestHistory } from './entities/request-history.entity';
 import { Product } from '../products/entities/product.entity';
 import { Store } from '../stores/entities/store.entity';
 import { StoresModule } from '../stores/stores.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { RequestsService } from './requests.service';
 import { RequestsController } from './requests.controller';
 
@@ -12,6 +13,7 @@ import { RequestsController } from './requests.controller';
   imports: [
     TypeOrmModule.forFeature([ProductRequest, RequestHistory, Product, Store]),
     StoresModule,
+    NotificationsModule,
   ],
   controllers: [RequestsController],
   providers: [RequestsService],

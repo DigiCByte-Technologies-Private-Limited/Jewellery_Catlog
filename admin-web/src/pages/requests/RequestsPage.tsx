@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { requestsApi, type ProductRequestItem } from '../../api/requests.api';
 import { storesApi, type StoreItem } from '../../api/stores.api';
 import {
@@ -29,6 +30,9 @@ import {
 } from 'lucide-react';
 
 export function RequestsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlRequestId = searchParams.get('id');
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [purchaseStatusFilter, setPurchaseStatusFilter] = useState('');
@@ -42,6 +46,14 @@ export function RequestsPage() {
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // Auto-open modal if navigated from notification alert (?id=REQ-000010)
+  useEffect(() => {
+    if (urlRequestId) {
+      setSelectedRequestId(urlRequestId);
+      setIsDetailOpen(true);
+    }
+  }, [urlRequestId]);
 
   // 1. Fetch Store List for Filter
   const { data: storesResponse } = useQuery({
@@ -684,6 +696,11 @@ export function RequestsPage() {
         onClose={() => {
           setIsDetailOpen(false);
           setSelectedRequestId(null);
+          if (searchParams.get('id')) {
+            const next = new URLSearchParams(searchParams);
+            next.delete('id');
+            setSearchParams(next, { replace: true });
+          }
         }}
         onUpdated={() => {
           refetchStats();
