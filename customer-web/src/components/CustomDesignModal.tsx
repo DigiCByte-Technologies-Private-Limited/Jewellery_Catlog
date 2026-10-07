@@ -18,6 +18,7 @@ import {
   Layers,
   Palette,
   ShieldCheck,
+  MessageCircle,
 } from 'lucide-react';
 import {
   customDesignsApi,
@@ -326,6 +327,18 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a
+                  href={`https://wa.me/916303955998?text=${encodeURIComponent(
+                    `✦ AURUM JEWELS · BESPOKE COMMISSION ✦\nCommission ID: ${submittedData.requestId}\nPatron: ${submittedData.customerName}\nDesign: ${submittedData.productName}\n\nHello AURUM Concierge, I have submitted a bespoke custom jewelry request. I would like to discuss it directly on WhatsApp.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#104b2b] hover:bg-[#0c3920] text-emerald-100 text-xs font-bold uppercase tracking-wider transition-colors border border-emerald-500/40 shadow-xs"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-300" />
+                  <span>Chat on WhatsApp</span>
+                </a>
+
                 {onOpenTrack && (
                   <button
                     type="button"

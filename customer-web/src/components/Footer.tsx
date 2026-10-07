@@ -353,13 +353,13 @@ export const Footer: React.FC<FooterProps> = ({
               </li>
               <li>
                 <a
-                  href="https://wa.me/919876543210?text=Hello%2C%20I%20would%20like%20to%20consult%20with%20an%20AURUM%20jewellery%20specialist."
+                  href="https://wa.me/916303955998?text=Hello%2C%20I%20would%20like%20to%20consult%20with%20an%20AURUM%20jewellery%20specialist."
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-emerald-700 transition-colors flex items-center gap-2 group"
                 >
                   <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span className="text-emerald-800 font-medium">WhatsApp Concierge</span>
+                  <span className="text-emerald-800 font-medium">WhatsApp Concierge (+91 63039 55998)</span>
                 </a>
               </li>
               <li>

@@ -343,8 +343,8 @@ export const ShowroomAuthenticitySection: React.FC<ShowroomAuthenticitySectionPr
 
                   {/* WhatsApp */}
                   <a
-                    href={`https://wa.me/${activeStore.phone.replace(/[^\d]/g, '')}?text=${encodeURIComponent(
-                      `Hello, I would like to inquire about fine jewellery at your ${activeStore.name}.`
+                    href={`https://wa.me/916303955998?text=${encodeURIComponent(
+                      `Hello AURUM Concierge, I would like to inquire about fine jewellery at your ${activeStore.name} (${activeStore.city}).`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"

@@ -529,6 +529,18 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+                  <a
+                    href={`https://wa.me/916303955998?text=${encodeURIComponent(
+                      `✦ AURUM JEWELS · BESPOKE COMMISSION ✦\nCommission ID: ${submittedData.requestId}\nPatron: ${submittedData.customerName}\nCreation: ${submittedData.productName}\n\nHello AURUM Concierge, I have submitted a bespoke custom commission request. I would like to discuss the CAD / gouache rendering directly.`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto px-7 py-3 rounded-full bg-[#104b2b] hover:bg-[#0c3920] text-emerald-100 font-semibold text-xs tracking-wider uppercase shadow-md transition-all flex items-center justify-center gap-2 border border-emerald-500/40"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Discuss on WhatsApp</span>
+                  </a>
+
                   <button
                     type="button"
                     onClick={() => {

@@ -46,16 +46,16 @@ interface LuxuryCartDrawerProps {
 }
 
 const SHOWROOM_OPTIONS = [
-  { city: 'Bangalore', name: 'Bangalore Luxury Gallery', phone: '+91 80 4112 7700', waNumber: '918041127700' },
-  { city: 'Mumbai', name: 'Mumbai Diamond Hub (Bandra West)', phone: '+91 22 2640 1234', waNumber: '912226401234' },
-  { city: 'Delhi', name: 'Delhi Sovereign Emporium (South Ext)', phone: '+91 11 4164 5566', waNumber: '911141645566' },
-  { city: 'Hyderabad', name: 'Hyderabad Royal Heritage (Jubilee Hills)', phone: '+91 40 2355 8899', waNumber: '914023558899' },
-  { city: 'Chennai', name: 'Chennai Heritage Hall (Nungambakkam)', phone: '+91 44 2833 4455', waNumber: '914428334455' },
-  { city: 'Vijayawada', name: 'Vijayawada Flagship Boutique (MG Road)', phone: '+91 866 247 1100', waNumber: '918662471100' },
-  { city: 'Guntur', name: 'Guntur Regional Showroom (Arundelpet)', phone: '+91 863 222 3456', waNumber: '918632223456' },
+  { city: 'Bangalore', name: 'Bangalore Luxury Gallery', phone: '+91 80 4112 7700', waNumber: '916303955998' },
+  { city: 'Mumbai', name: 'Mumbai Diamond Hub (Bandra West)', phone: '+91 22 2640 1234', waNumber: '916303955998' },
+  { city: 'Delhi', name: 'Delhi Sovereign Emporium (South Ext)', phone: '+91 11 4164 5566', waNumber: '916303955998' },
+  { city: 'Hyderabad', name: 'Hyderabad Royal Heritage (Jubilee Hills)', phone: '+91 40 2355 8899', waNumber: '916303955998' },
+  { city: 'Chennai', name: 'Chennai Heritage Hall (Nungambakkam)', phone: '+91 44 2833 4455', waNumber: '916303955998' },
+  { city: 'Vijayawada', name: 'Vijayawada Flagship Boutique (MG Road)', phone: '+91 866 247 1100', waNumber: '916303955998' },
+  { city: 'Guntur', name: 'Guntur Regional Showroom (Arundelpet)', phone: '+91 863 222 3456', waNumber: '916303955998' },
 ];
 
-const CENTRAL_CONCIERGE_WA = '919876543210';
+const CENTRAL_CONCIERGE_WA = '916303955998';
 
 type DrawerStep = 'summary' | 'details' | 'success';
 
@@ -672,6 +672,12 @@ export const LuxuryCartDrawer: React.FC<LuxuryCartDrawerProps> = ({
                   <span className="text-stone-500">Assigned Showroom:</span>
                   <span className="font-medium text-stone-900 text-right truncate max-w-[200px]">
                     {confirmedInquiry.showroomName}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-stone-500">WhatsApp Concierge Desk:</span>
+                  <span className="font-mono font-medium text-emerald-800">
+                    +91 63039 55998
                   </span>
                 </div>
               </div>
