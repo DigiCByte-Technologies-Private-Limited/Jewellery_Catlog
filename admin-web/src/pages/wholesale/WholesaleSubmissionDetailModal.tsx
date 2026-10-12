@@ -6,6 +6,7 @@ import {
   type WholesaleSubmissionStatus,
   type MediaConflictCheckResult,
 } from '../../api/wholesale.api';
+import { productsApi } from '../../api/products.api';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import {
@@ -51,9 +52,17 @@ export function WholesaleSubmissionDetailModal({
 
   // Publish to Catalog Modal State
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [targetProductId, setTargetProductId] = useState<string>('');
   const [replacePrimary, setReplacePrimary] = useState(true);
   const [altText, setAltText] = useState('');
   const [displayOrder, setDisplayOrder] = useState(0);
+
+  // Fetch official products for linking
+  const { data: products = [] } = useQuery({
+    queryKey: ['products-list'],
+    queryFn: async () => (await productsApi.getAll({ limit: 500 })).data?.data || [],
+    enabled: isPublishModalOpen,
+  });
 
   // 1. Fetch Submission Details
   const {
@@ -123,6 +132,7 @@ export function WholesaleSubmissionDetailModal({
     mutationFn: async () => {
       if (!submissionId) return;
       return await wholesaleApi.publishToCatalog(submissionId, {
+        productId: targetProductId || undefined,
         imageIndex: 0,
         replacePrimary,
         isPrimary: replacePrimary,
@@ -414,9 +424,7 @@ export function WholesaleSubmissionDetailModal({
                   <Button
                     size="sm"
                     onClick={() => {
-                      if (!submission.productId) {
-                        alert('This submission is not linked to an official catalog product ID yet. Please link or approve first.');
-                      }
+                      setTargetProductId(submission.productId || '');
                       setIsPublishModalOpen(true);
                     }}
                     disabled={submission.isPublishedToCatalog}
@@ -708,6 +716,27 @@ export function WholesaleSubmissionDetailModal({
                 </div>
               </div>
 
+              {!submission?.productId && (
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-amber-400" />
+                    <span className="font-semibold text-slate-200">Select Target Product</span>
+                  </div>
+                  <select
+                    value={targetProductId}
+                    onChange={(e) => setTargetProductId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- Choose an official product --</option>
+                    {products.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} (SKU: {p.sku})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {isLoadingConflict ? (
                 <div className="p-8 flex items-center justify-center gap-2 text-slate-400">
                   <Loader2 className="w-5 h-5 animate-spin text-amber-400" /> Checking catalog media conflicts...
@@ -847,7 +876,7 @@ export function WholesaleSubmissionDetailModal({
               <Button
                 size="sm"
                 onClick={() => publishMutation.mutate()}
-                disabled={publishMutation.isPending}
+                disabled={publishMutation.isPending || (!submission?.productId && !targetProductId)}
                 className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-4"
               >
                 {publishMutation.isPending ? (

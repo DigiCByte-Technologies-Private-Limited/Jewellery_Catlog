@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customersApi } from '../../api/customers.api';
+import {
+  StandardPageLayout,
+  type StatWidget,
+} from '../../components/layout/StandardPageLayout';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
-import { Card, CardContent } from '../../components/ui/Card';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { useToast } from '../../components/ui/Toast';
 import {
-  Users,
   Crown,
   Heart,
   Calendar,
@@ -18,7 +21,7 @@ import {
   Plus,
   Phone,
   Sparkles,
-  Search,
+  RotateCcw,
 } from 'lucide-react';
 
 export function CustomersPage() {
@@ -26,7 +29,10 @@ export function CustomersPage() {
   const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
   const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'OCCASIONS'>('DIRECTORY');
+  const [page, setPage] = useState(1);
+  const limit = 10;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   // Form state
@@ -257,113 +263,185 @@ export function CustomersPage() {
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Jewellery Customer Relationship Management</h1>
-          <p className="text-slate-500 text-sm">High-net-worth client profiles, bridal portfolios, KYC PAN compliance & occasion triggers</p>
-        </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="w-4 h-4 mr-1.5" /> Add Customer
-        </Button>
+  // Filtered clients
+  const filteredCustomers = customers.filter((c: any) => {
+    if (tagFilter && !c.tags?.includes(tagFilter)) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesName = c.fullName?.toLowerCase().includes(q);
+      const matchesPhone = c.phone?.toLowerCase().includes(q);
+      const matchesEmail = c.email?.toLowerCase().includes(q);
+      const matchesCity = c.city?.toLowerCase().includes(q);
+      if (!matchesName && !matchesPhone && !matchesEmail && !matchesCity) return false;
+    }
+    return true;
+  });
+
+  const filteredOccasions = occasions.filter((o: any) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesName = o.fullName?.toLowerCase().includes(q);
+      const matchesPhone = o.phone?.toLowerCase().includes(q);
+      if (!matchesName && !matchesPhone) return false;
+    }
+    return true;
+  });
+
+  const currentDataset = activeTab === 'DIRECTORY' ? filteredCustomers : filteredOccasions;
+  const totalItems = currentDataset.length;
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const paginatedData = currentDataset.slice((page - 1) * limit, page * limit);
+
+  const statWidgets: StatWidget[] = [
+    {
+      label: 'Registered Clients',
+      value: totalCustomers,
+      subtext: 'Verified showroom profiles',
+      variant: 'default',
+      onClick: () => {
+        setActiveTab('DIRECTORY');
+        setTagFilter('');
+        setPage(1);
+      },
+    },
+    {
+      label: 'VIP / HNI Clients',
+      value: vipCount,
+      subtext: 'Special preview privileges',
+      variant: 'gold',
+      onClick: () => {
+        setActiveTab('DIRECTORY');
+        setTagFilter('VIP');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Bridal Trousseau',
+      value: bridalCount,
+      subtext: 'Active wedding consultations',
+      variant: 'purple',
+      onClick: () => {
+        setActiveTab('DIRECTORY');
+        setTagFilter('BRIDAL');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Client Lifetime Value',
+      value: `₹${totalLifetimeValue.toLocaleString('en-IN')}`,
+      subtext: 'Cumulative showroom spend',
+      variant: 'emerald',
+    },
+  ];
+
+  const filterSlot = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Tab Switcher */}
+      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+        <button
+          onClick={() => {
+            setActiveTab('DIRECTORY');
+            setPage(1);
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            activeTab === 'DIRECTORY'
+              ? 'bg-white text-slate-900 shadow-xs font-semibold'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Client Directory ({totalCustomers})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('OCCASIONS');
+            setPage(1);
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+            activeTab === 'OCCASIONS'
+              ? 'bg-white text-slate-900 shadow-xs font-semibold'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Gift className="w-3.5 h-3.5 text-rose-500" />
+          <span>Upcoming Celebrations ({occasions.length})</span>
+        </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-white border-slate-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Registered Clients</div>
-            <div className="text-2xl font-black text-slate-900 font-mono mt-1 flex items-center gap-1.5">
-              <Users className="w-5 h-5 text-slate-500" />
-              <span>{totalCustomers}</span>
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Verified showroom profiles</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-amber-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">VIP / HNI Clients</div>
-            <div className="text-2xl font-black text-amber-950 font-mono mt-1 flex items-center gap-1.5">
-              <Crown className="w-5 h-5 text-amber-500 fill-amber-500" />
-              <span>{vipCount}</span>
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Special preview privileges</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-rose-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-rose-700 uppercase tracking-wider">Bridal Troussaeu</div>
-            <div className="text-2xl font-black text-rose-950 font-mono mt-1 flex items-center gap-1.5">
-              <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
-              <span>{bridalCount}</span>
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Active wedding consultations</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-emerald-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Client Lifetime Value</div>
-            <div className="text-2xl font-black text-emerald-950 font-mono mt-1">
-              ₹{totalLifetimeValue.toLocaleString('en-IN')}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Cumulative sales across directory</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabs & Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-3">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setActiveTab('DIRECTORY')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              activeTab === 'DIRECTORY'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Client Directory ({totalCustomers})
-          </button>
-          <button
-            onClick={() => setActiveTab('OCCASIONS')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
-              activeTab === 'OCCASIONS'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Gift className="w-3.5 h-3.5" />
-            <span>Upcoming Celebrations ({occasions.length})</span>
-          </button>
-        </div>
-
-        {activeTab === 'DIRECTORY' && (
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by name or phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+      {activeTab === 'DIRECTORY' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-56">
+            <CustomDropdown
+              value={tagFilter}
+              onChange={(val) => {
+                setTagFilter(val);
+                setPage(1);
+              }}
+              placeholder="All Client Segments"
+              options={[
+                { value: '', label: 'All Segments' },
+                { value: 'VIP', label: 'VIP / HNI Clients', badge: 'VIP' },
+                { value: 'BRIDAL', label: 'Bridal Consultations', badge: 'Bride' },
+                { value: 'REGULAR', label: 'Regular Shoppers', badge: 'Loyal' },
+              ]}
             />
           </div>
-        )}
-      </div>
 
-      {/* Tables */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        {activeTab === 'DIRECTORY' ? (
-          <Table columns={columns} data={customers} isLoading={customersLoading} />
-        ) : (
-          <Table columns={occasionsColumns} data={occasions} isLoading={occasionsLoading} />
-        )}
-      </div>
+          {(tagFilter || searchQuery) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setTagFilter('');
+                setSearchQuery('');
+                setPage(1);
+              }}
+              className="text-xs text-slate-500 hover:text-slate-800"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <StandardPageLayout
+        title="Jewellery Customer Relationship Management"
+        description="High-net-worth client profiles, bridal portfolios, KYC PAN compliance & occasion triggers"
+        badge="CRM & Client Profiles"
+        stats={statWidgets}
+        searchPlaceholder={activeTab === 'DIRECTORY' ? 'Search clients by name, phone, email, city...' : 'Search celebrations by client...'}
+        searchValue={searchQuery}
+        onSearchChange={(val) => {
+          setSearchQuery(val);
+          setPage(1);
+        }}
+        filterSlot={filterSlot}
+        primaryAction={
+          <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> Add Customer
+          </Button>
+        }
+        isLoading={activeTab === 'DIRECTORY' ? customersLoading : occasionsLoading}
+        totalCount={totalItems}
+        tableContent={
+          <Table
+            columns={activeTab === 'DIRECTORY' ? columns : occasionsColumns}
+            data={paginatedData}
+            isLoading={activeTab === 'DIRECTORY' ? customersLoading : occasionsLoading}
+          />
+        }
+        pagination={{
+          currentPage: page,
+          totalPages,
+          totalItems,
+          itemsPerPage: limit,
+          onPageChange: setPage,
+        }}
+      />
 
       {/* Create Customer Modal */}
       <Modal
@@ -487,6 +565,6 @@ export function CustomersPage() {
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

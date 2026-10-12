@@ -1,29 +1,36 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { enquiriesApi } from '../../api/enquiries.api';
+import {
+  StandardPageLayout,
+  type StatWidget,
+} from '../../components/layout/StandardPageLayout';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
-import { Card, CardContent } from '../../components/ui/Card';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { useToast } from '../../components/ui/Toast';
 import {
-  PhoneCall,
   UserCheck,
   Plus,
+  ArrowRight,
+  RotateCcw,
+  PhoneCall,
   Calendar,
   Sparkles,
-  ArrowRight,
-  TrendingUp,
 } from 'lucide-react';
 
 export function EnquiriesPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const limit = 10;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   // Create Form State
@@ -221,78 +228,134 @@ export function EnquiriesPage() {
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Showroom Walk-in & Digital Enquiries</h1>
-          <p className="text-slate-500 text-sm">Lead tracking, customer bridal consultations, and showroom sales pipeline</p>
-        </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="w-4 h-4 mr-1.5" /> Log New Lead
+  // Filtered dataset
+  const filteredEnquiries = enquiries.filter((e: any) => {
+    if (stageFilter && e.stage !== stageFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesNum = e.enquiryNumber?.toLowerCase().includes(q);
+      const matchesName = e.customerName?.toLowerCase().includes(q);
+      const matchesPhone = e.customerPhone?.toLowerCase().includes(q);
+      const matchesEmail = e.customerEmail?.toLowerCase().includes(q);
+      const matchesNotes = e.notes?.toLowerCase().includes(q);
+      if (!matchesNum && !matchesName && !matchesPhone && !matchesEmail && !matchesNotes) return false;
+    }
+    return true;
+  });
+
+  const totalItems = filteredEnquiries.length;
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const paginatedEnquiries = filteredEnquiries.slice((page - 1) * limit, page * limit);
+
+  const statWidgets: StatWidget[] = [
+    {
+      label: 'Total Inquiries',
+      value: totalLeads,
+      subtext: 'Walk-ins & online leads recorded',
+      variant: 'default',
+      onClick: () => {
+        setStageFilter('');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Active Pipeline',
+      value: activeLeads,
+      subtext: 'Under follow-up or quotation',
+      variant: 'blue',
+      onClick: () => {
+        setStageFilter('NEW');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Converted Clients',
+      value: convertedLeads,
+      subtext: 'Converted to orders or bookings',
+      variant: 'emerald',
+      onClick: () => {
+        setStageFilter('CONVERTED');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Conversion Ratio',
+      value: `${conversionRate}%`,
+      subtext: 'Closing effectiveness',
+      variant: 'gold',
+    },
+  ];
+
+  const filterSlot = (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="w-64">
+        <CustomDropdown
+          value={stageFilter}
+          onChange={(val) => {
+            setStageFilter(val);
+            setPage(1);
+          }}
+          placeholder="All Pipeline Stages"
+          options={[
+            { value: '', label: 'All Inquiries' },
+            { value: 'NEW', label: 'New Walk-in Lead', badge: 'New' },
+            { value: 'CONTACTED', label: 'Contacted & Followed Up', badge: 'Call' },
+            { value: 'VISITED', label: 'Visited Showroom', badge: 'Visit' },
+            { value: 'QUOTED', label: 'Quotation Provided', badge: 'Quote' },
+            { value: 'CONVERTED', label: 'Converted Client', badge: 'Won' },
+            { value: 'LOST', label: 'Lost Opportunity', badge: 'Lost' },
+          ]}
+        />
+      </div>
+
+      {(stageFilter || search) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setStageFilter('');
+            setSearch('');
+            setPage(1);
+          }}
+          className="text-xs text-slate-500 hover:text-slate-800"
+        >
+          <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+          Clear Filters
         </Button>
-      </div>
+      )}
+    </div>
+  );
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-white border-slate-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Inquiries</div>
-            <div className="text-2xl font-black text-slate-900 font-mono mt-1">{totalLeads}</div>
-            <div className="text-xs text-slate-400 mt-1">Walk-ins & online leads recorded</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-blue-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Active Pipeline</div>
-            <div className="text-2xl font-black text-blue-900 font-mono mt-1">{activeLeads}</div>
-            <div className="text-xs text-slate-400 mt-1">Under follow-up or quotation</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-emerald-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Converted Clients</div>
-            <div className="text-2xl font-black text-emerald-950 font-mono mt-1">{convertedLeads}</div>
-            <div className="text-xs text-slate-400 mt-1">Converted to orders or advance bookings</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-amber-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Conversion Ratio</div>
-            <div className="text-2xl font-black text-amber-950 font-mono mt-1 flex items-center gap-1.5">
-              <TrendingUp className="w-5 h-5 text-amber-600" />
-              <span>{conversionRate}%</span>
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Sales closing effectiveness</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Stage Tabs */}
-      <div className="flex gap-2 border-b border-slate-200 pb-3 flex-wrap">
-        {(['', 'NEW', 'CONTACTED', 'VISITED', 'QUOTED', 'CONVERTED', 'LOST'] as const).map((s) => (
-          <button
-            key={s || 'ALL'}
-            onClick={() => setStageFilter(s)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              stageFilter === s
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {s ? s : 'All Leads'}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        <Table columns={columns} data={enquiries} isLoading={isLoading} />
-      </div>
+  return (
+    <>
+      <StandardPageLayout
+        title="Showroom Walk-in & Digital Enquiries"
+        description="Lead tracking, customer bridal consultations, and showroom sales pipeline"
+        badge="Walk-ins & Pipeline"
+        stats={statWidgets}
+        searchPlaceholder="Search leads by #, customer name, phone, email, notes..."
+        searchValue={search}
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPage(1);
+        }}
+        filterSlot={filterSlot}
+        primaryAction={
+          <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> Log New Lead
+          </Button>
+        }
+        isLoading={isLoading}
+        totalCount={totalItems}
+        tableContent={<Table columns={columns} data={paginatedEnquiries} />}
+        pagination={{
+          currentPage: page,
+          totalPages,
+          totalItems,
+          itemsPerPage: limit,
+          onPageChange: setPage,
+        }}
+      />
 
       {/* Log Enquiry Modal */}
       <Modal
@@ -426,6 +489,6 @@ export function EnquiriesPage() {
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

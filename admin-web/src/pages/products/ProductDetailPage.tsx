@@ -1,17 +1,22 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { productsApi } from '../../api/products.api';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useToast } from '../../components/ui/Toast';
-import { ArrowLeft, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Sparkles, Trash2, Edit3, Image as ImageIcon } from 'lucide-react';
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   const { data: productData, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -76,6 +81,14 @@ export function ProductDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate(`/products/${id}/edit`)}
+          >
+            <Edit3 className="w-4 h-4 mr-1.5" />
+            Edit Product
+          </Button>
           {productData.status !== 'PUBLISHED' && (
             <Button
               size="sm"
@@ -99,14 +112,7 @@ export function ProductDetailPage() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              if (confirm('Delete this product?')) {
-                productsApi.delete(id!).then(() => {
-                  toast({ type: 'success', title: 'Deleted', message: 'Product removed' });
-                  navigate('/products');
-                });
-              }
-            }}
+            onClick={() => setIsDeleteDialogOpen(true)}
           >
             <Trash2 className="w-4 h-4 text-rose-600" />
           </Button>
@@ -116,6 +122,60 @@ export function ProductDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Product Attributes (2 cols) */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Media Showcase Card */}
+          {productData.media && productData.media.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3 border-b border-slate-100">
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-amber-600" />
+                    Product Visual Showcase
+                  </span>
+                  <Badge variant="info" className="font-mono text-xs">
+                    {productData.media.length} Asset{productData.media.length === 1 ? '' : 's'}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-3">
+                <div className="aspect-[16/9] max-h-80 bg-slate-50 rounded-xl overflow-hidden border border-slate-200 flex items-center justify-center relative">
+                  <img
+                    src={productData.media[selectedImageIndex]?.standardUrl || productData.media[selectedImageIndex]?.originalUrl}
+                    alt={productData.media[selectedImageIndex]?.altText || productData.name}
+                    className="w-full h-full object-contain"
+                  />
+                  {productData.media[selectedImageIndex]?.isPrimary && (
+                    <span className="absolute top-3 left-3 bg-amber-600 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full shadow">
+                      PRIMARY SHOWCASE
+                    </span>
+                  )}
+                </div>
+
+                {productData.media.length > 1 && (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1">
+                    {productData.media.map((img: any, idx: number) => (
+                      <button
+                        key={img.id || idx}
+                        type="button"
+                        onClick={() => setSelectedImageIndex(idx)}
+                        className={`w-16 h-16 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all ${
+                          selectedImageIndex === idx
+                            ? 'border-amber-600 ring-2 ring-amber-400/30'
+                            : 'border-slate-200 opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <img
+                          src={img.thumbnailUrl || img.originalUrl}
+                          alt={`Thumb ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Physical & Metal Specifications</CardTitle>
@@ -251,6 +311,25 @@ export function ProductDetailPage() {
           </Card>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={async () => {
+          setIsDeleting(true);
+          try {
+            await productsApi.delete(id!);
+            toast({ type: 'success', title: 'Deleted', message: 'Product removed from catalog' });
+            navigate('/products');
+          } catch (err: any) {
+            toast({ type: 'error', title: 'Delete Failed', message: err.response?.data?.message || 'Failed to delete product' });
+            setIsDeleting(false);
+          }
+        }}
+        title="Delete Jewelry Product"
+        message={`Are you sure you want to delete "${productData?.name || 'this product'}"? This action cannot be undone.`}
+        confirmText="Delete Product"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

@@ -6,17 +6,18 @@ interface TableProps {
   data: any[];
   isLoading?: boolean;
   emptyMessage?: string;
+  stickyHeader?: boolean;
 }
 
-export function Table({ columns, data, isLoading, emptyMessage = 'No data available' }: TableProps) {
+export function Table({ columns, data, isLoading, emptyMessage = 'No data available', stickyHeader = true }: TableProps) {
   return (
-    <div className="w-full border rounded-lg overflow-hidden bg-white">
+    <div className="w-full border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 border-b text-slate-500 font-medium">
+          <thead className={`${stickyHeader ? 'sticky top-0 z-10' : ''} bg-slate-50/95 backdrop-blur-xs border-b border-slate-200 text-slate-500 font-medium text-xs tracking-wide`}>
             <tr>
               {columns.map((col, i) => (
-                <th key={i} className="px-4 py-3 whitespace-nowrap">{col.header}</th>
+                <th key={i} className="px-4 py-3.5 whitespace-nowrap">{col.header}</th>
               ))}
             </tr>
           </thead>

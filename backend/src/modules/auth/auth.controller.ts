@@ -39,12 +39,13 @@ export class AuthController {
     const result = await this.authService.login(dto, ip, userAgent);
 
     // Set refresh token as httpOnly cookie
-    res.cookie('refresh_token', result.refreshToken, {
+    res.cookie('admin_refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
+    res.clearCookie('refresh_token');
 
     return {
       success: true,
@@ -66,8 +67,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get new access token using refresh token cookie' })
   async refresh(@Req() req: Request) {
-    const token = req.cookies?.['refresh_token'];
-    if (!token) throw new BadRequestException('No refresh token provided');
+    const token = req.cookies?.['admin_refresh_token'];
+    if (!token) throw new BadRequestException('No admin refresh token provided');
     const result = await this.authService.refreshToken(token);
     return { success: true, data: result };
   }
@@ -78,6 +79,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   async logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    res.clearCookie('admin_refresh_token');
     res.clearCookie('refresh_token');
     return this.authService.logout(req.user.id);
   }
@@ -116,7 +118,7 @@ export class AuthController {
     const userAgent = req.headers['user-agent'];
     const result = await this.authService.customerRegister(dto, ip, userAgent);
 
-    res.cookie('refresh_token', result.refreshToken, {
+    res.cookie('customer_refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -147,7 +149,7 @@ export class AuthController {
     const userAgent = req.headers['user-agent'];
     const result = await this.authService.customerLogin(dto, ip, userAgent);
 
-    res.cookie('refresh_token', result.refreshToken, {
+    res.cookie('customer_refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

@@ -12,6 +12,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { requestsApi, type TrackRequestResult } from '../api/requests.api';
+import { isValidPhone, sanitizePhoneNumber, formatRequestId } from '../utils/validation';
 
 interface TrackRequestModalProps {
   isOpen: boolean;
@@ -23,6 +24,18 @@ export const TrackRequestModal: React.FC<TrackRequestModalProps> = ({ isOpen, on
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [result, setResult] = useState<TrackRequestResult | null>(null);
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   // Freeze background page scroll and pause Lenis smooth scroll when track modal is open
   React.useEffect(() => {
@@ -39,24 +52,38 @@ export const TrackRequestModal: React.FC<TrackRequestModalProps> = ({ isOpen, on
       if (lenis) lenis.start();
     };
   }, [isOpen]);
-  const [result, setResult] = useState<TrackRequestResult | null>(null);
 
   if (!isOpen) return null;
 
   const handleTrack = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setFieldErrors({});
     setResult(null);
 
-    if (!requestId.trim() || !phone.trim()) {
-      setErrorMsg('Please enter both your Request ID and registered phone number.');
+    const errors: Record<string, string> = {};
+    const cleanId = formatRequestId(requestId);
+    if (!cleanId) {
+      errors.requestId = 'Please enter your Request ID (e.g. REQ-000001).';
+    }
+
+    const cleanPhone = sanitizePhoneNumber(phone);
+    if (!phone.trim()) {
+      errors.phone = 'Please enter your registered phone number.';
+    } else if (!isValidPhone(cleanPhone)) {
+      errors.phone = 'Please provide a valid 10-digit mobile number.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMsg('Please correct the highlighted fields.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const res = await requestsApi.trackRequest(requestId.trim(), phone.trim());
+      const res = await requestsApi.trackRequest(cleanId, cleanPhone);
       setResult(res.data?.data);
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message;
@@ -151,9 +178,19 @@ export const TrackRequestModal: React.FC<TrackRequestModalProps> = ({ isOpen, on
                   required
                   placeholder="e.g. REQ-000001"
                   value={requestId}
-                  onChange={(e) => setRequestId(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-stone-200 focus:border-amber-600 text-xs font-mono font-bold text-stone-900 placeholder-stone-400 focus:outline-none transition-colors uppercase shadow-2xs"
+                  onChange={(e) => {
+                    setRequestId(e.target.value);
+                    clearFieldError('requestId');
+                  }}
+                  className={`w-full px-3.5 py-2 rounded-xl bg-white border text-xs font-mono font-bold text-stone-900 placeholder-stone-400 focus:outline-none transition-colors uppercase shadow-2xs ${
+                    fieldErrors.requestId
+                      ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                      : 'border-stone-200 focus:border-amber-600'
+                  }`}
                 />
+                {fieldErrors.requestId && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.requestId}</p>
+                )}
               </div>
 
               <div>
@@ -163,11 +200,22 @@ export const TrackRequestModal: React.FC<TrackRequestModalProps> = ({ isOpen, on
                 <input
                   type="tel"
                   required
+                  maxLength={14}
                   placeholder="e.g. 9876543210"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-stone-200 focus:border-amber-600 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs"
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    clearFieldError('phone');
+                  }}
+                  className={`w-full px-3.5 py-2 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs ${
+                    fieldErrors.phone
+                      ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                      : 'border-stone-200 focus:border-amber-600'
+                  }`}
                 />
+                {fieldErrors.phone && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.phone}</p>
+                )}
               </div>
             </div>
 

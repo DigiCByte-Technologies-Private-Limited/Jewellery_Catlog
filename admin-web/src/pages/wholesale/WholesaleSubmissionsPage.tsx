@@ -14,18 +14,14 @@ import {
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { WholesaleSubmissionDetailModal } from './WholesaleSubmissionDetailModal';
 import {
-  Sparkles,
-  Inbox,
-  Clock,
-  CheckCircle2,
   Eye,
   FileImage,
   RefreshCw,
-  ShieldAlert,
   ShieldCheck,
-  Check,
+  RotateCcw,
 } from 'lucide-react';
 
 export function WholesaleSubmissionsPage() {
@@ -36,7 +32,7 @@ export function WholesaleSubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState<WholesaleSubmissionStatus | ''>('');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [page, setPage] = useState(1);
-  const limit = 15;
+  const limit = 10;
 
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -111,43 +107,61 @@ export function WholesaleSubmissionsPage() {
       label: 'Total Proposals',
       value: stats.total,
       subtext: 'B2B image submissions',
-      watermarkIcon: <Inbox className="w-16 h-16" />,
       variant: 'default',
+      onClick: () => {
+        setStatusFilter('');
+        setPage(1);
+      },
     },
     {
       label: 'Pending Review',
       value: stats.pendingReview,
       subtext: stats.pendingReview > 0 ? 'Requires admin action' : 'All caught up',
-      watermarkIcon: <Sparkles className="w-16 h-16" />,
       variant: stats.pendingReview > 0 ? 'gold' : 'default',
+      onClick: () => {
+        setStatusFilter('PENDING_REVIEW');
+        setPage(1);
+      },
     },
     {
       label: 'Under Review',
       value: stats.underReview,
       subtext: 'In active evaluation',
-      watermarkIcon: <Clock className="w-16 h-16" />,
       variant: 'blue',
+      onClick: () => {
+        setStatusFilter('UNDER_REVIEW');
+        setPage(1);
+      },
     },
     {
       label: 'Accepted Proposals',
       value: stats.imageAccepted,
       subtext: 'Approved for catalog',
-      watermarkIcon: <CheckCircle2 className="w-16 h-16" />,
       variant: 'emerald',
+      onClick: () => {
+        setStatusFilter('IMAGE_ACCEPTED');
+        setPage(1);
+      },
     },
     {
       label: 'Rejected',
       value: stats.imageRejected,
       subtext: 'Feedback provided',
-      watermarkIcon: <ShieldAlert className="w-16 h-16" />,
       variant: 'default',
+      onClick: () => {
+        setStatusFilter('IMAGE_REJECTED');
+        setPage(1);
+      },
     },
     {
       label: 'Completed / Handled',
       value: stats.completed,
       subtext: 'Catalog updated or finalized',
-      watermarkIcon: <Check className="w-16 h-16" />,
       variant: 'default',
+      onClick: () => {
+        setStatusFilter('COMPLETED');
+        setPage(1);
+      },
     },
   ];
 
@@ -294,7 +308,6 @@ export function WholesaleSubmissionsPage() {
         title="Wholesale Product Proposals"
         description="Review high-resolution product imagery and specs proposed by wholesale accounts. Inspect, verify quality, and publish directly to official catalog."
         badge="B2B Hub"
-        headerWatermark={<Inbox className="w-48 h-48 opacity-10" />}
         stats={statWidgets}
         searchPlaceholder="Search proposals by ID, product, or wholesale partner..."
         searchValue={search}
@@ -303,32 +316,40 @@ export function WholesaleSubmissionsPage() {
         onViewModeChange={setViewMode}
         showViewToggle={true}
         filterSlot={
-          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-            {(
-              [
-                { label: 'All', value: '' },
-                { label: 'Pending Review', value: 'PENDING_REVIEW' },
-                { label: 'Under Review', value: 'UNDER_REVIEW' },
-                { label: 'Accepted', value: 'IMAGE_ACCEPTED' },
-                { label: 'Rejected', value: 'IMAGE_REJECTED' },
-                { label: 'Completed', value: 'COMPLETED' },
-              ] as const
-            ).map((filter) => (
-              <button
-                key={filter.value}
-                onClick={() => {
-                  setStatusFilter(filter.value as any);
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-64">
+              <CustomDropdown
+                value={statusFilter}
+                onChange={(val) => {
+                  setStatusFilter(val as any);
                   setPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  statusFilter === filter.value
-                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                placeholder="All Proposal Statuses"
+                options={[
+                  { value: '', label: `All Proposals (${stats.total})` },
+                  { value: 'PENDING_REVIEW', label: `Pending Review (${stats.pendingReview})`, badge: 'Pending' },
+                  { value: 'UNDER_REVIEW', label: `Under Review (${stats.underReview})`, badge: 'Review' },
+                  { value: 'IMAGE_ACCEPTED', label: `Accepted (${stats.imageAccepted})`, badge: 'Accepted' },
+                  { value: 'IMAGE_REJECTED', label: `Rejected (${stats.imageRejected})`, badge: 'Rejected' },
+                  { value: 'COMPLETED', label: `Completed (${stats.completed})`, badge: 'Done' },
+                ]}
+              />
+            </div>
+            {(statusFilter || search) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStatusFilter('');
+                  setSearch('');
+                  setPage(1);
+                }}
+                className="text-xs text-slate-500 hover:text-slate-800"
               >
-                {filter.label}
-              </button>
-            ))}
+                <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+                Clear Filters
+              </Button>
+            )}
           </div>
         }
         secondaryActions={

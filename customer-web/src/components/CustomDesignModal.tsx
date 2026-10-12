@@ -26,6 +26,7 @@ import {
   type CreateCustomDesignPayload,
 } from '../api/custom-designs.api';
 import { useCustomerAuthStore } from '../store/authStore';
+import { isValidEmail, isValidPhone, isValidName, sanitizePhoneNumber } from '../utils/validation';
 
 interface CustomDesignModalProps {
   isOpen: boolean;
@@ -93,7 +94,18 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [copiedId, setCopiedId] = useState(false);
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   const [submittedData, setSubmittedData] = useState<{
     requestId: string;
@@ -160,22 +172,42 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setFieldErrors({});
 
-    // Validations
+    const errors: Record<string, string> = {};
+
+    // 1. Customer Name
     if (!formData.customerName.trim()) {
-      setErrorMsg('Please enter your full name.');
-      return;
+      errors.customerName = 'Please enter your full name.';
+    } else if (!isValidName(formData.customerName)) {
+      errors.customerName = 'Name must be at least 2 characters long.';
     }
-    if (!formData.email.trim() || !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
-      setErrorMsg('Please enter a valid email address.');
-      return;
+
+    // 2. Email Address
+    if (!formData.email.trim()) {
+      errors.email = 'Please enter your email address.';
+    } else if (!isValidEmail(formData.email)) {
+      errors.email = 'Please provide a valid email address.';
     }
-    if (!formData.phone.trim() || formData.phone.trim().length < 7) {
-      setErrorMsg('Please provide a valid phone or WhatsApp number.');
-      return;
+
+    // 3. Phone / WhatsApp
+    const cleanPhone = sanitizePhoneNumber(formData.phone);
+    if (!formData.phone.trim()) {
+      errors.phone = 'Please provide your phone or WhatsApp number.';
+    } else if (!isValidPhone(cleanPhone)) {
+      errors.phone = 'Please enter a valid 10-digit mobile number.';
     }
+
+    // 4. Design Description
     if (!formData.designDescription.trim()) {
-      setErrorMsg('Please describe your custom design requirements.');
+      errors.designDescription = 'Please describe your custom design requirements.';
+    } else if (formData.designDescription.trim().length < 10) {
+      errors.designDescription = 'Please describe your design concept in more detail (minimum 10 characters).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMsg('Please correct the highlighted fields before submitting.');
       return;
     }
 
@@ -190,7 +222,7 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
         customerName: formData.customerName.trim(),
         companyName: formData.companyName.trim() || undefined,
         email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
+        phone: cleanPhone,
         productName: formData.productName.trim() || 'Bespoke Custom Jewelry',
         designDescription: formData.designDescription.trim(),
         designRequirements: formData.designRequirements.trim() || undefined,
@@ -389,10 +421,20 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
                         required
                         placeholder="e.g. John Doe"
                         value={formData.customerName}
-                        onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                        className="w-full pl-9 pr-3.5 py-2 bg-white border border-stone-300 rounded-lg text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/40 focus:border-[#8C6A28]"
+                        onChange={(e) => {
+                          setFormData({ ...formData, customerName: e.target.value });
+                          clearFieldError('customerName');
+                        }}
+                        className={`w-full pl-9 pr-3.5 py-2 bg-white border rounded-lg text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none transition-colors ${
+                          fieldErrors.customerName
+                            ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                            : 'border-stone-300 focus:ring-2 focus:ring-[#8C6A28]/40 focus:border-[#8C6A28]'
+                        }`}
                       />
                     </div>
+                    {fieldErrors.customerName && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.customerName}</p>
+                    )}
                   </div>
 
                   <div>
@@ -422,10 +464,20 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
                         required
                         placeholder="customer@example.com"
                         value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full pl-9 pr-3.5 py-2 bg-white border border-stone-300 rounded-lg text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/40 focus:border-[#8C6A28]"
+                        onChange={(e) => {
+                          setFormData({ ...formData, email: e.target.value });
+                          clearFieldError('email');
+                        }}
+                        className={`w-full pl-9 pr-3.5 py-2 bg-white border rounded-lg text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none transition-colors ${
+                          fieldErrors.email
+                            ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                            : 'border-stone-300 focus:ring-2 focus:ring-[#8C6A28]/40 focus:border-[#8C6A28]'
+                        }`}
                       />
                     </div>
+                    {fieldErrors.email && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.email}</p>
+                    )}
                   </div>
 
                   <div>
@@ -437,12 +489,23 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
                       <input
                         type="tel"
                         required
+                        maxLength={14}
                         placeholder="+91 98765 43210"
                         value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full pl-9 pr-3.5 py-2 bg-white border border-stone-300 rounded-lg text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/40 focus:border-[#8C6A28]"
+                        onChange={(e) => {
+                          setFormData({ ...formData, phone: e.target.value });
+                          clearFieldError('phone');
+                        }}
+                        className={`w-full pl-9 pr-3.5 py-2 bg-white border rounded-lg text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none transition-colors ${
+                          fieldErrors.phone
+                            ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                            : 'border-stone-300 focus:ring-2 focus:ring-[#8C6A28]/40 focus:border-[#8C6A28]'
+                        }`}
                       />
                     </div>
+                    {fieldErrors.phone && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.phone}</p>
+                    )}
                   </div>
                 </div>
 
@@ -579,9 +642,19 @@ export const CustomDesignModal: React.FC<CustomDesignModalProps> = ({
                       required
                       placeholder="Describe the aesthetic, motifs, styling, engraving, or specific design elements you envision..."
                       value={formData.designDescription}
-                      onChange={(e) => setFormData({ ...formData, designDescription: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-lg text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/40 focus:border-[#8C6A28]"
+                      onChange={(e) => {
+                        setFormData({ ...formData, designDescription: e.target.value });
+                        clearFieldError('designDescription');
+                      }}
+                      className={`w-full px-3.5 py-2.5 bg-white border rounded-lg text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none transition-colors ${
+                        fieldErrors.designDescription
+                          ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                          : 'border-stone-300 focus:ring-2 focus:ring-[#8C6A28]/40 focus:border-[#8C6A28]'
+                      }`}
                     />
+                    {fieldErrors.designDescription && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.designDescription}</p>
+                    )}
                   </div>
 
                   <div>

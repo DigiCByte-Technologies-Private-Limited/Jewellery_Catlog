@@ -6,10 +6,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { ProductRequest } from './entities/request.entity';
 import { RequestHistory } from './entities/request-history.entity';
 import { Store } from '../stores/entities/store.entity';
+import { WholesalePartner } from '../wholesale-auth/entities/wholesale-partner.entity';
+import { User } from '../users/entities/user.entity';
 import { StoresService } from '../stores/stores.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -17,6 +19,7 @@ import {
   UpdateProductRequestDto,
   QueryProductRequestsDto,
   AssignStoreDto,
+  AssignPartnerDto,
   StoreFollowUpDto,
   StorePurchaseOutcomeDto,
 } from './dto/product-request.dto';
@@ -40,6 +43,10 @@ export class RequestsService {
     private readonly historyRepo: Repository<RequestHistory>,
     @InjectRepository(Store)
     private readonly storeRepo: Repository<Store>,
+    @InjectRepository(WholesalePartner)
+    private readonly partnerRepo: Repository<WholesalePartner>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly storesService: StoresService,
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -231,6 +238,41 @@ export class RequestsService {
 
     const [data, total] = await qb.getManyAndCount();
 
+    // Enrich with assigned wholesale partner if assignedToUserId exists
+    const partnerUserIds = Array.from(
+      new Set(data.map((r) => r.assignedToUserId).filter(Boolean))
+    ) as string[];
+    if (partnerUserIds.length > 0) {
+      const [partners, partnerUsers] = await Promise.all([
+        this.partnerRepo.find({ where: { userId: In(partnerUserIds) } }),
+        this.userRepo.find({ where: { id: In(partnerUserIds) } }),
+      ]);
+      const partnerMap = new Map(partners.map((p) => [p.userId, p]));
+      const userMap = new Map(partnerUsers.map((u) => [u.id, u]));
+
+      data.forEach((r) => {
+        if (r.assignedToUserId) {
+          const p = partnerMap.get(r.assignedToUserId);
+          const u = userMap.get(r.assignedToUserId);
+          if (p) {
+            (r as any).assignedPartner = {
+              userId: p.userId,
+              companyName: p.companyName,
+              ownerName: p.ownerName,
+              fullName: p.ownerName || u?.fullName || p.companyName,
+              phone: p.phone || u?.phone || '',
+              email: u?.email || '',
+              city: p.city || '',
+              state: p.state || '',
+              businessType: p.businessType || 'Wholesale Partner',
+              isVerified: p.isVerified,
+              gstNumber: p.gstNumber || undefined,
+            };
+          }
+        }
+      });
+    }
+
     return {
       success: true,
       data,
@@ -289,6 +331,31 @@ export class RequestsService {
       }
     }
 
+    // Enrich with Wholesale Partner details if assigned
+    if (request.assignedToUserId) {
+      const partner = await this.partnerRepo.findOne({
+        where: { userId: request.assignedToUserId },
+      });
+      if (partner) {
+        const partnerUser = await this.userRepo.findOne({
+          where: { id: partner.userId },
+        });
+        (request as any).assignedPartner = {
+          userId: partner.userId,
+          companyName: partner.companyName,
+          ownerName: partner.ownerName,
+          fullName: partner.ownerName || partnerUser?.fullName || partner.companyName,
+          phone: partner.phone || partnerUser?.phone || '',
+          email: partnerUser?.email || '',
+          city: partner.city || '',
+          state: partner.state || '',
+          businessType: partner.businessType || 'Wholesale Partner',
+          isVerified: partner.isVerified,
+          gstNumber: partner.gstNumber || undefined,
+        };
+      }
+    }
+
     return {
       success: true,
       data: request,
@@ -323,11 +390,16 @@ export class RequestsService {
       throw new BadRequestException('Selected store is not active or does not exist');
     }
 
-    const isReassign = !!request.assignedStoreId;
-    const previousStoreName = request.assignedStore?.name;
+    const isReassign = !!request.assignedStoreId || !!request.assignedToUserId;
+    const previousTarget = request.assignedStore?.name
+      ? `Store ${request.assignedStore.name}`
+      : request.assignedToUserId
+      ? 'Wholesale Partner'
+      : null;
 
     request.assignedStoreId = store.id;
     request.assignedStore = store;
+    request.assignedToUserId = null; // Clear partner when assigning to physical store
     request.assignedAt = new Date();
 
     if (request.status === RequestStatus.NEW) {
@@ -344,7 +416,7 @@ export class RequestsService {
       actorName: user?.fullName || 'Central Admin',
       action: isReassign ? RequestHistoryAction.STORE_REASSIGNED : RequestHistoryAction.STORE_ASSIGNED,
       note: isReassign
-        ? `Reassigned from ${previousStoreName || 'Previous Store'} to ${store.name} (${store.city}). Note: ${dto.note || 'None'}`
+        ? `Reassigned from ${previousTarget || 'Previous Destination'} to ${store.name} (${store.city}). Note: ${dto.note || 'None'}`
         : `Assigned to ${store.name} (${store.city}). Note: ${dto.note || 'None'}`,
     });
     await this.historyRepo.save(history);
@@ -354,6 +426,86 @@ export class RequestsService {
     return {
       success: true,
       message: `Request ${request.requestId} successfully assigned to ${store.name}`,
+      data: request,
+    };
+  }
+
+  /**
+   * 5.1 Admin assigns or reassigns customer request to a Wholesale Partner
+   */
+  async assignPartner(id: string, dto: AssignPartnerDto, user?: any) {
+    const res = await this.findOne(id);
+    const request = res.data;
+
+    // Support looking up wholesale partner by userId OR by partner row id
+    const partner = await this.partnerRepo.findOne({
+      where: [{ userId: dto.partnerUserId }, { id: dto.partnerUserId }],
+    });
+
+    if (!partner) {
+      throw new BadRequestException('Selected wholesale partner profile does not exist');
+    }
+
+    const isReassign = !!request.assignedToUserId || !!request.assignedStoreId;
+    const previousDestination = request.assignedStore
+      ? `Showroom ${request.assignedStore.name}`
+      : request.assignedToUserId
+      ? 'Previous Partner'
+      : null;
+
+    // Clear store association so lead is exclusively routed to Wholesale Partner
+    request.assignedStoreId = null;
+    request.assignedStore = null;
+    request.assignedToUserId = partner.userId;
+    request.assignedAt = new Date();
+
+    if (request.status === RequestStatus.NEW) {
+      request.status = RequestStatus.ASSIGNED;
+    }
+
+    if (dto.note) {
+      const partnerNote = `[Wholesale Lead Dispatch - ${partner.companyName}]: ${dto.note}`;
+      request.adminNotes = request.adminNotes
+        ? `${request.adminNotes}\n${partnerNote}`
+        : partnerNote;
+    }
+
+    await this.requestRepo.save(request);
+
+    // Record audit trail
+    const history = this.historyRepo.create({
+      requestId: request.id,
+      actorRole: ActorRole.ADMIN,
+      actorId: user?.id || null,
+      actorName: user?.fullName || 'Central Admin',
+      action: isReassign ? RequestHistoryAction.STORE_REASSIGNED : RequestHistoryAction.STORE_ASSIGNED,
+      note: isReassign
+        ? `Reassigned from ${previousDestination || 'Previous Showroom'} to Wholesale Partner: ${partner.companyName} (${partner.city || 'Regional'}). Note: ${dto.note || 'None'}`
+        : `Assigned to Wholesale Partner: ${partner.companyName} (${partner.city || 'Regional'}). Note: ${dto.note || 'None'}`,
+    });
+    await this.historyRepo.save(history);
+
+    const partnerUser = await this.userRepo.findOne({ where: { id: partner.userId } });
+    const assignedPartnerInfo = {
+      userId: partner.userId,
+      companyName: partner.companyName,
+      ownerName: partner.ownerName,
+      fullName: partner.ownerName || partnerUser?.fullName || partner.companyName,
+      phone: partner.phone || partnerUser?.phone || '',
+      email: partnerUser?.email || '',
+      city: partner.city || '',
+      state: partner.state || '',
+      businessType: partner.businessType || 'Wholesale Partner',
+      isVerified: partner.isVerified,
+      gstNumber: partner.gstNumber || undefined,
+    };
+    (request as any).assignedPartner = assignedPartnerInfo;
+
+    this.logger.log(`Request ${request.requestId} assigned to Wholesale Partner ${partner.companyName}`);
+
+    return {
+      success: true,
+      message: `Request ${request.requestId} successfully assigned to Wholesale Partner: ${partner.companyName}`,
       data: request,
     };
   }
@@ -544,6 +696,15 @@ export class RequestsService {
   async update(id: string, dto: UpdateProductRequestDto) {
     const res = await this.findOne(id);
     const request = res.data;
+
+    if (dto.assignedToUserId) {
+      request.assignedStoreId = null;
+      request.assignedStore = null;
+      request.assignedAt = new Date();
+      if (request.status === RequestStatus.NEW) {
+        request.status = RequestStatus.ASSIGNED;
+      }
+    }
 
     Object.assign(request, dto);
     await this.requestRepo.save(request);

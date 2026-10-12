@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
@@ -7,6 +7,16 @@ import { Input } from '../../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { AlertCircle } from 'lucide-react';
 
+export const ALLOWED_ADMIN_ROLES = [
+  'SUPER_ADMIN',
+  'STORE_MANAGER',
+  'SALES_STAFF',
+  'CATALOG_MANAGER',
+  'INVENTORY_MANAGER',
+  'AUDITOR',
+  'MARKETING',
+];
+
 export function LoginPage() {
   const [email, setEmail] = useState('admin@jewellery.com');
   const [password, setPassword] = useState('Admin@1234');
@@ -14,6 +24,14 @@ export function LoginPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
+
+  // Automatically clear any stale wholesale or customer sessions on login page visit
+  useEffect(() => {
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser && !ALLOWED_ADMIN_ROLES.includes(currentUser.role)) {
+      useAuthStore.getState().logout();
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +42,14 @@ export function LoginPage() {
       const res = await authApi.login(email, password);
       const data = res.data?.data;
       if (data?.accessToken && data?.user) {
+        if (!ALLOWED_ADMIN_ROLES.includes(data.user.role)) {
+          setErrorMsg(
+            `Access Denied: Your account role (${data.user.role}) is not authorized for the Admin ERP Portal. Please sign in with an administrator account (e.g. admin@jewellery.com).`
+          );
+          useAuthStore.getState().logout();
+          return;
+        }
+
         setAuth(data.user, data.accessToken);
         navigate('/dashboard', { replace: true });
       } else {
@@ -39,6 +65,12 @@ export function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fillAdminCredentials = () => {
+    setEmail('admin@jewellery.com');
+    setPassword('Admin@1234');
+    setErrorMsg('');
   };
 
   return (
@@ -77,10 +109,19 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
 
-            <div className="p-2.5 bg-slate-50 border border-slate-100 rounded text-[11px] text-slate-500 font-mono space-y-0.5">
-              <div>Default Super Admin:</div>
-              <div className="text-slate-700 font-semibold">Email: admin@jewellery.com</div>
-              <div className="text-slate-700 font-semibold">Password: Admin@1234</div>
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-[11px] text-slate-600 font-mono space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700">Default Super Admin:</span>
+                <button
+                  type="button"
+                  onClick={fillAdminCredentials}
+                  className="text-[10px] text-amber-700 hover:text-amber-900 font-semibold underline cursor-pointer"
+                >
+                  Auto-fill Admin
+                </button>
+              </div>
+              <div>Email: <span className="font-semibold text-slate-800">admin@jewellery.com</span></div>
+              <div>Password: <span className="font-semibold text-slate-800">Admin@1234</span></div>
             </div>
 
             <Button type="submit" className="w-full" isLoading={loading}>

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { requestsApi, type CreateInquiryPayload } from '../api/requests.api';
 import { useCustomerAuthStore } from '../store/authStore';
+import { isValidEmail, isValidPhone, isValidName, sanitizePhoneNumber } from '../utils/validation';
 
 export interface InquiryProductContext {
   productId?: string;
@@ -59,10 +60,21 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
   const [isLocating, setIsLocating] = useState(false);
   const [locationDetected, setLocationDetected] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submittedData, setSubmittedData] = useState<{
     requestId: string;
     productName: string;
   } | null>(null);
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   // Freeze background page scroll and pause Lenis smooth scroll when inquiry modal is open
   React.useEffect(() => {
@@ -122,26 +134,45 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setFieldErrors({});
 
-    // Client-side validations
+    const errors: Record<string, string> = {};
+
+    // 1. Full name validation
     if (!formData.customerName.trim()) {
-      setErrorMsg('Please enter your full name.');
-      return;
+      errors.customerName = 'Please enter your name.';
+    } else if (!isValidName(formData.customerName)) {
+      errors.customerName = 'Name must be at least 2 characters long.';
     }
-    if (!formData.email.trim() || !/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
-      setErrorMsg('Please enter a valid email address.');
-      return;
+
+    // 2. Email validation
+    if (!formData.email.trim()) {
+      errors.email = 'Please enter your email address.';
+    } else if (!isValidEmail(formData.email)) {
+      errors.email = 'Please provide a valid email address.';
     }
+
+    // 3. Phone number validation & sanitization
+    const cleanPhone = sanitizePhoneNumber(formData.phone);
     if (!formData.phone.trim()) {
-      setErrorMsg('Please enter your phone number.');
-      return;
+      errors.phone = 'Please enter your contact phone number.';
+    } else if (!isValidPhone(cleanPhone)) {
+      errors.phone = 'Please provide a valid 10-digit mobile number.';
     }
-    if (!formData.city.trim()) {
-      setErrorMsg('Please enter your city to identify your nearby showroom.');
-      return;
+
+    // 4. City validation
+    if (!formData.city.trim() || formData.city.trim().length < 2) {
+      errors.city = 'Please enter your city to assign the nearest boutique concierge.';
     }
-    if (!formData.message.trim()) {
-      setErrorMsg('Please enter your requirement message.');
+
+    // 5. Message validation
+    if (!formData.message.trim() || formData.message.trim().length < 5) {
+      errors.message = 'Please provide your inquiry details (minimum 5 characters).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMsg('Please correct the highlighted fields before submitting.');
       return;
     }
 
@@ -150,8 +181,8 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
     try {
       const payload: CreateInquiryPayload = {
         customerName: formData.customerName.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: cleanPhone,
         companyName: formData.companyName.trim() || undefined,
         city: formData.city.trim(),
         state: formData.state.trim() || undefined,
@@ -188,6 +219,7 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
   const handleResetAndClose = () => {
     setSubmittedData(null);
     setErrorMsg(null);
+    setFieldErrors({});
     setLocationDetected(false);
     setFormData({
       customerName: '',
@@ -344,9 +376,19 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
                     required
                     placeholder="e.g. Rahul Kumar"
                     value={formData.customerName}
-                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-white border border-stone-200 focus:border-amber-600 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs"
+                    onChange={(e) => {
+                      setFormData({ ...formData, customerName: e.target.value });
+                      clearFieldError('customerName');
+                    }}
+                    className={`w-full px-3.5 py-2 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs ${
+                      fieldErrors.customerName
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-amber-600'
+                    }`}
                   />
+                  {fieldErrors.customerName && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.customerName}</p>
+                  )}
                 </div>
 
                 <div>
@@ -359,9 +401,19 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
                     required
                     placeholder="e.g. rahul@biotech.com"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-white border border-stone-200 focus:border-amber-600 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs"
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      clearFieldError('email');
+                    }}
+                    className={`w-full px-3.5 py-2 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs ${
+                      fieldErrors.email
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-amber-600'
+                    }`}
                   />
+                  {fieldErrors.email && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -372,11 +424,22 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
                   <input
                     type="tel"
                     required
+                    maxLength={14}
                     placeholder="e.g. +91 9876543210"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-white border border-stone-200 focus:border-amber-600 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs"
+                    onChange={(e) => {
+                      setFormData({ ...formData, phone: e.target.value });
+                      clearFieldError('phone');
+                    }}
+                    className={`w-full px-3.5 py-2 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs ${
+                      fieldErrors.phone
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-amber-600'
+                    }`}
                   />
+                  {fieldErrors.phone && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.phone}</p>
+                  )}
                 </div>
 
                 <div>
@@ -421,9 +484,19 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
                       required
                       placeholder="e.g. Vijayawada, Hyderabad"
                       value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-stone-200 focus:border-amber-600 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs"
+                      onChange={(e) => {
+                        setFormData({ ...formData, city: e.target.value });
+                        clearFieldError('city');
+                      }}
+                      className={`w-full px-3.5 py-2 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs ${
+                        fieldErrors.city
+                          ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                          : 'border-stone-200 focus:border-amber-600'
+                      }`}
                     />
+                    {fieldErrors.city && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.city}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider text-stone-600 mb-1 font-medium">
@@ -511,9 +584,19 @@ export const ProductInquiryModal: React.FC<ProductInquiryModalProps> = ({
                   required
                   placeholder="Please describe your requirements, timeline, and questions..."
                   value={formData.message}
-                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-amber-600 text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs resize-none"
+                  onChange={(e) => {
+                    setFormData({ ...formData, message: e.target.value });
+                    clearFieldError('message');
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none transition-colors shadow-2xs resize-none ${
+                    fieldErrors.message
+                      ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                      : 'border-stone-200 focus:border-amber-600'
+                  }`}
                 />
+                {fieldErrors.message && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.message}</p>
+                )}
               </div>
 
               {/* Submit Button */}

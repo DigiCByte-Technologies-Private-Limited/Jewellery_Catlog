@@ -36,6 +36,7 @@ export class CategoriesController {
       page: query.page ? parseInt(query.page) : 1,
       limit: query.limit ? parseInt(query.limit) : 50,
       search: query.search,
+      hierarchy: query.hierarchy,
     });
   }
 

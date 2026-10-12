@@ -141,7 +141,7 @@ export class WholesaleAuthController {
     const ip = req.ip || req.headers['x-forwarded-for']?.toString();
     const result = await this.wholesaleAuthService.login(dto, ip);
 
-    res.cookie('refresh_token', result.refreshToken, {
+    res.cookie('wholesale_refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -157,6 +157,19 @@ export class WholesaleAuthController {
         partner: result.partner,
       },
     };
+  }
+
+  /**
+   * 2.1 Refresh wholesale partner session
+   */
+  @Post('auth/refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh wholesale partner session' })
+  async refreshWholesale(@Req() req: Request) {
+    const token = req.cookies?.['wholesale_refresh_token'];
+    if (!token) throw new BadRequestException('No wholesale refresh token provided');
+    const result = await this.wholesaleAuthService.refreshToken(token);
+    return { success: true, data: result };
   }
 
   /**
@@ -201,6 +214,7 @@ export class WholesaleAuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout and invalidate session' })
   async logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    res.clearCookie('wholesale_refresh_token');
     res.clearCookie('refresh_token');
     return this.wholesaleAuthService.logout(req.user.id);
   }
@@ -327,7 +341,7 @@ export class WholesaleAuthController {
 
   @Get(['admin/applications', 'auth/partners'])
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.AUDITOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.AUDITOR, UserRole.SALES_STAFF)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin: List wholesale applications with filters & statistics' })
   async listApplications(@Query() filter: WholesaleApplicationFilterDto) {
@@ -336,7 +350,7 @@ export class WholesaleAuthController {
 
   @Get('admin/applications/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.AUDITOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.AUDITOR, UserRole.SALES_STAFF)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin: Get full wholesale application detail, KYC docs, and history' })
   async getApplicationDetail(@Param('id') id: string) {

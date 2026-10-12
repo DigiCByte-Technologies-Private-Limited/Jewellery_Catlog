@@ -13,27 +13,45 @@ import {
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { CustomDesignDetailModal } from './CustomDesignDetailModal';
 import {
-  Sparkles,
-  Inbox,
-  Clock,
-  CheckCircle2,
   Eye,
   FileText,
   RefreshCw,
   Building2,
+  RotateCcw,
 } from 'lucide-react';
 
 export function CustomDesignsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlRequestId = searchParams.get('id');
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [page, setPage] = useState(1);
-  const limit = 15;
+  const [limit, setLimit] = useState(Number(searchParams.get('limit')) || 10);
+
+  const updateFilterParam = (key: string, val: string) => {
+    setPage(1);
+    const params = new URLSearchParams(searchParams);
+    if (val) {
+      params.set(key, val);
+    } else {
+      params.delete(key);
+    }
+    setSearchParams(params);
+  };
+
+  const resetAllFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setPage(1);
+    setSearchParams({});
+  };
+
+  const hasActiveFilters = Boolean(search || statusFilter);
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -107,49 +125,87 @@ export function CustomDesignsPage() {
     }
   };
 
-  // Stat Widgets
+  // Stat Widgets (Watermark-Free & Interactive Filters)
   const statWidgets: StatWidget[] = [
     {
       label: 'Total Custom Requests',
       value: stats.total,
       subtext: 'Bespoke design inquiries',
-      watermarkIcon: <Inbox className="w-16 h-16" />,
       variant: 'default',
+      clickable: true,
+      isActive: !hasActiveFilters,
+      actionHint: !hasActiveFilters ? 'Showing All' : 'Reset & Show All',
+      onClick: resetAllFilters,
     },
     {
       label: 'New & Unreviewed',
       value: stats.new,
       subtext: stats.new > 0 ? 'Requires atelier review' : 'All caught up',
-      watermarkIcon: <Sparkles className="w-16 h-16" />,
       variant: stats.new > 0 ? 'gold' : 'default',
+      clickable: true,
+      isActive: statusFilter === 'NEW',
+      actionHint: statusFilter === 'NEW' ? 'Active Filter (Click to Reset)' : 'Click to Filter New',
+      onClick: () => {
+        const next = statusFilter === 'NEW' ? '' : 'NEW';
+        setStatusFilter(next);
+        updateFilterParam('status', next);
+      },
     },
     {
       label: 'Under Review / CAD',
       value: stats.underReview,
       subtext: 'In 3D modeling & assessment',
-      watermarkIcon: <Clock className="w-16 h-16" />,
       variant: 'blue',
+      clickable: true,
+      isActive: statusFilter === 'UNDER_REVIEW',
+      actionHint: statusFilter === 'UNDER_REVIEW' ? 'Active Filter (Click to Reset)' : 'Click to Filter Review',
+      onClick: () => {
+        const next = statusFilter === 'UNDER_REVIEW' ? '' : 'UNDER_REVIEW';
+        setStatusFilter(next);
+        updateFilterParam('status', next);
+      },
     },
     {
       label: 'In Quotation',
       value: stats.quotation,
       subtext: 'Quotes provided to customer',
-      watermarkIcon: <FileText className="w-16 h-16" />,
       variant: 'gold',
+      clickable: true,
+      isActive: statusFilter === 'QUOTATION',
+      actionHint: statusFilter === 'QUOTATION' ? 'Active Filter (Click to Reset)' : 'Click to Filter Quote',
+      onClick: () => {
+        const next = statusFilter === 'QUOTATION' ? '' : 'QUOTATION';
+        setStatusFilter(next);
+        updateFilterParam('status', next);
+      },
     },
     {
       label: 'Approved & In Making',
       value: stats.approved,
       subtext: 'Ready for Karigar production',
-      watermarkIcon: <CheckCircle2 className="w-16 h-16" />,
       variant: 'emerald',
+      clickable: true,
+      isActive: statusFilter === 'APPROVED',
+      actionHint: statusFilter === 'APPROVED' ? 'Active Filter (Click to Reset)' : 'Click to Filter Approved',
+      onClick: () => {
+        const next = statusFilter === 'APPROVED' ? '' : 'APPROVED';
+        setStatusFilter(next);
+        updateFilterParam('status', next);
+      },
     },
     {
       label: 'Completed & Delivered',
       value: stats.completed,
       subtext: 'Delivered to clients',
-      watermarkIcon: <CheckCircle2 className="w-16 h-16" />,
       variant: 'default',
+      clickable: true,
+      isActive: statusFilter === 'COMPLETED',
+      actionHint: statusFilter === 'COMPLETED' ? 'Active Filter (Click to Reset)' : 'Click to Filter Completed',
+      onClick: () => {
+        const next = statusFilter === 'COMPLETED' ? '' : 'COMPLETED';
+        setStatusFilter(next);
+        updateFilterParam('status', next);
+      },
     },
   ];
 
@@ -387,7 +443,7 @@ export function CustomDesignsPage() {
       searchValue={search}
       onSearchChange={(val) => {
         setSearch(val);
-        setPage(1);
+        updateFilterParam('search', val);
       }}
       viewMode={viewMode}
       onViewModeChange={setViewMode}
@@ -406,24 +462,38 @@ export function CustomDesignsPage() {
         </Button>
       }
       filterSlot={
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs rounded-lg border border-slate-300 py-1.5 px-2.5 bg-white focus:outline-none focus:border-amber-500 text-slate-700 font-medium"
-          >
-            <option value="">All Statuses ({stats.total})</option>
-            <option value="NEW">NEW ({stats.new})</option>
-            <option value="UNDER_REVIEW">UNDER_REVIEW ({stats.underReview})</option>
-            <option value="CONTACTED">CONTACTED ({stats.contacted})</option>
-            <option value="QUOTATION">QUOTATION ({stats.quotation})</option>
-            <option value="APPROVED">APPROVED ({stats.approved})</option>
-            <option value="REJECTED">REJECTED ({stats.rejected})</option>
-            <option value="COMPLETED">COMPLETED ({stats.completed})</option>
-          </select>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 justify-between w-full">
+          <div className="w-full sm:w-72">
+            <CustomDropdown
+              value={statusFilter}
+              onChange={(val) => {
+                setStatusFilter(val);
+                updateFilterParam('status', val);
+              }}
+              placeholder="All Statuses"
+              options={[
+                { label: 'All Statuses', value: '', count: stats.total },
+                { label: 'New & Unreviewed', value: 'NEW', badge: 'New', count: stats.new },
+                { label: 'Under Review / CAD', value: 'UNDER_REVIEW', badge: 'CAD', count: stats.underReview },
+                { label: 'Client Contacted', value: 'CONTACTED', count: stats.contacted },
+                { label: 'In Quotation', value: 'QUOTATION', badge: 'Quote', count: stats.quotation },
+                { label: 'Approved by Client', value: 'APPROVED', badge: 'Making', count: stats.approved },
+                { label: 'Declined / Rejected', value: 'REJECTED', count: stats.rejected },
+                { label: 'Completed & Delivered', value: 'COMPLETED', badge: 'Done', count: stats.completed },
+              ]}
+            />
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="self-end sm:self-center text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 font-semibold px-3 py-1.5 rounded-lg shrink-0 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Clear</span>
+            </button>
+          )}
         </div>
       }
       tableContent={
@@ -443,6 +513,11 @@ export function CustomDesignsPage() {
         totalItems,
         itemsPerPage: limit,
         onPageChange: setPage,
+        onItemsPerPageChange: (newLimit) => {
+          setLimit(newLimit);
+          setPage(1);
+          updateFilterParam('limit', newLimit === 10 ? '' : String(newLimit));
+        },
       }}
     >
       {/* Details & Management Modal */}

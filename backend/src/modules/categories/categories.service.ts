@@ -29,8 +29,8 @@ export class CategoriesService {
     return { success: true, data: trees };
   }
 
-  async getFlat(query: { page?: number; limit?: number; search?: string }) {
-    const { page = 1, limit = 50, search } = query;
+  async getFlat(query: { page?: number; limit?: number; search?: string; hierarchy?: 'ROOT' | 'SUB' }) {
+    const { page = 1, limit = 50, search, hierarchy } = query;
     const skip = (page - 1) * limit;
 
     const qb = this.categoryRepo
@@ -43,7 +43,15 @@ export class CategoriesService {
       .take(limit);
 
     if (search) {
-      qb.andWhere('LOWER(c.name) LIKE :search', { search: `%${search.toLowerCase()}%` });
+      qb.andWhere('(LOWER(c.name) LIKE :search OR LOWER(c.slug) LIKE :search)', {
+        search: `%${search.toLowerCase()}%`,
+      });
+    }
+
+    if (hierarchy === 'ROOT') {
+      qb.andWhere('c.parentId IS NULL');
+    } else if (hierarchy === 'SUB') {
+      qb.andWhere('c.parentId IS NOT NULL');
     }
 
     const [data, total] = await qb.getManyAndCount();

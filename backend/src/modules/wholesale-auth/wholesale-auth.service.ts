@@ -483,6 +483,8 @@ export class WholesaleAuthService {
       const u = userMap.get(item.userId);
       return {
         ...item,
+        fullName: item.ownerName || u?.fullName || item.companyName || 'N/A',
+        phone: item.phone || u?.phone || 'N/A',
         email: u?.email || 'N/A',
       };
     });
@@ -977,6 +979,40 @@ export class WholesaleAuthService {
     return {
       success: true,
       data: combined,
+    };
+  }
+
+  // ─── REFRESH TOKEN ─────────────────────────────────────────────────────────
+
+  async refreshToken(refreshToken: string) {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const user = await this.userRepo.findOne({
+      where: { id: payload.sub },
+    });
+    if (!user || !user.refreshTokenHash) throw new UnauthorizedException('Session expired. Please log in again.');
+    if (!user.isActive) throw new UnauthorizedException('Account is disabled');
+    if (user.role !== UserRole.WHOLESALE_USER) {
+      throw new UnauthorizedException('Access denied. Not a wholesale account.');
+    }
+
+    const isMatch = await argon2.verify(user.refreshTokenHash, refreshToken);
+    if (!isMatch) throw new UnauthorizedException('Refresh token mismatch. Please log in again.');
+
+    const partner = await this.partnerRepo.findOne({ where: { userId: user.id } });
+
+    const newAccessToken = this._generateAccessToken(user);
+    return {
+      accessToken: newAccessToken,
+      user: this._sanitizeUser(user),
+      partner: partner ? this._sanitizePartner(partner) : null,
     };
   }
 

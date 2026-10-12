@@ -1,18 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { oldGoldApi } from '../../api/old-gold.api';
+import {
+  StandardPageLayout,
+  type StatWidget,
+} from '../../components/layout/StandardPageLayout';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { useToast } from '../../components/ui/Toast';
 import {
   Coins,
   Scale,
   Receipt,
+  RotateCcw,
 } from 'lucide-react';
 
 export function OldGoldPage() {
@@ -20,6 +26,10 @@ export function OldGoldPage() {
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'calculator' | 'transactions'>('calculator');
+  const [search, setSearch] = useState('');
+  const [paymentModeFilter, setPaymentModeFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const limit = 10;
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
 
   // Calculator Form State
@@ -163,36 +173,149 @@ export function OldGoldPage() {
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Old Gold Exchange & Valuation</h1>
-          <p className="text-slate-500 text-sm">Customer jewellery buyback, XRF Karatmeter purity appraisal, and exchange credit vouchers</p>
-        </div>
+  const filteredTransactions = transactions.filter((t: any) => {
+    if (paymentModeFilter && t.paymentMode !== paymentModeFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesVoucher = t.voucherNumber?.toLowerCase().includes(q);
+      const matchesName = t.customerName?.toLowerCase().includes(q);
+      const matchesPhone = t.customerPhone?.toLowerCase().includes(q);
+      const matchesPan = t.customerPan?.toLowerCase().includes(q);
+      if (!matchesVoucher && !matchesName && !matchesPhone && !matchesPan) return false;
+    }
+    return true;
+  });
 
-        <div className="flex border rounded-lg overflow-hidden bg-white">
-          <button
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'calculator' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-50'
-            }`}
-            onClick={() => setActiveTab('calculator')}
-          >
-            Valuation Calculator
-          </button>
-          <button
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'transactions' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-50'
-            }`}
-            onClick={() => setActiveTab('transactions')}
-          >
-            Vouchers Registry ({transactions.length})
-          </button>
-        </div>
+  const totalItems = filteredTransactions.length;
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const paginatedTransactions = filteredTransactions.slice((page - 1) * limit, page * limit);
+  const totalAcquiredGold = transactions.reduce((s: number, t: any) => s + Number(t.netFineGoldGrams || 0), 0);
+  const totalValuation = transactions.reduce((s: number, t: any) => s + Number(t.totalValuation || 0), 0);
+
+  const statWidgets: StatWidget[] = [
+    {
+      label: 'Total Vouchers',
+      value: transactions.length,
+      subtext: 'Completed exchange buybacks',
+      variant: 'default',
+      onClick: () => {
+        setActiveTab('transactions');
+        setPaymentModeFilter('');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Fine Gold Acquired',
+      value: `${totalAcquiredGold.toFixed(2)}g`,
+      subtext: 'Pure 24K equivalent net gold',
+      variant: 'gold',
+    },
+    {
+      label: 'Total Valuation Payout',
+      value: `₹${totalValuation.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+      subtext: 'Exchange credit issued',
+      variant: 'emerald',
+    },
+    {
+      label: 'Testing Standard',
+      value: 'XRF Karatmeter',
+      subtext: 'Non-destructive spectrometry',
+      variant: 'blue',
+      onClick: () => {
+        setActiveTab('calculator');
+      },
+    },
+  ];
+
+  const filterSlot = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Tab Switcher */}
+      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+        <button
+          onClick={() => setActiveTab('calculator')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            activeTab === 'calculator'
+              ? 'bg-white text-slate-900 shadow-xs font-semibold'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Valuation Calculator
+        </button>
+        <button
+          onClick={() => setActiveTab('transactions')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            activeTab === 'transactions'
+              ? 'bg-white text-slate-900 shadow-xs font-semibold'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Vouchers Registry ({transactions.length})
+        </button>
       </div>
 
-      {activeTab === 'calculator' && (
+      {activeTab === 'transactions' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-56">
+            <CustomDropdown
+              value={paymentModeFilter}
+              onChange={(val) => {
+                setPaymentModeFilter(val);
+                setPage(1);
+              }}
+              placeholder="All Settlement Modes"
+              options={[
+                { value: '', label: 'All Settlement Modes' },
+                { value: 'EXCHANGE_CREDIT', label: 'Exchange Credit', badge: 'Credit' },
+                { value: 'BANK_TRANSFER', label: 'Bank Transfer (RTGS)', badge: 'Bank' },
+                { value: 'CASH', label: 'Cash Settlement', badge: 'Cash' },
+              ]}
+            />
+          </div>
+
+          {(paymentModeFilter || search) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setPaymentModeFilter('');
+                setSearch('');
+                setPage(1);
+              }}
+              className="text-xs text-slate-500 hover:text-slate-800"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <StandardPageLayout
+        title="Old Gold Exchange & Valuation"
+        description="Customer jewellery buyback, XRF Karatmeter purity appraisal, and exchange credit vouchers"
+        badge="Exchange & Refine"
+        stats={statWidgets}
+        searchPlaceholder={activeTab === 'transactions' ? 'Search vouchers by number, customer name, phone, PAN...' : 'Appraisal valuation tool'}
+        searchValue={search}
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPage(1);
+        }}
+        filterSlot={filterSlot}
+        primaryAction={
+          <Button size="sm" onClick={() => setActiveTab('calculator')}>
+            <Scale className="w-4 h-4 mr-1.5" /> New Appraisal
+          </Button>
+        }
+        isLoading={activeTab === 'transactions' && txLoading}
+        totalCount={activeTab === 'transactions' ? totalItems : undefined}
+        tableContent={
+          activeTab === 'calculator' ? (
+            <div className="p-4 bg-slate-50/50">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Input Controls (2 columns) */}
           <div className="lg:col-span-2">
@@ -370,13 +493,23 @@ export function OldGoldPage() {
             </Card>
           </div>
         </div>
-      )}
-
-      {activeTab === 'transactions' && (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <Table columns={columns} data={transactions} isLoading={txLoading} />
-        </div>
-      )}
+      </div>
+    ) : (
+      <Table columns={columns} data={paginatedTransactions} isLoading={txLoading} />
+    )
+  }
+  pagination={
+    activeTab === 'transactions'
+      ? {
+          currentPage: page,
+          totalPages,
+          totalItems,
+          itemsPerPage: limit,
+          onPageChange: setPage,
+        }
+      : undefined
+  }
+/>
 
       {/* Accept & Generate Voucher Modal */}
       <Modal
@@ -464,6 +597,6 @@ export function OldGoldPage() {
           />
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

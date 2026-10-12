@@ -29,11 +29,20 @@ export function DashboardPage() {
     },
   });
 
-  // 2. Fetch products statistics
-  const { data: productsData } = useQuery({
-    queryKey: ['products', 'dashboard'],
+  // 2. Fetch products statistics (accurate live database aggregates)
+  const { data: productStats } = useQuery({
+    queryKey: ['products-stats', 'dashboard'],
     queryFn: async () => {
-      const res = await productsApi.getAll({ limit: 100 });
+      const res = await productsApi.getStats();
+      return res.data?.data;
+    },
+  });
+
+  // 2b. Fetch 4 most recent products for preview widget
+  const { data: recentProducts } = useQuery({
+    queryKey: ['products', 'dashboard-recent'],
+    queryFn: async () => {
+      const res = await productsApi.getAll({ limit: 4, sortBy: 'createdAt', sortOrder: 'DESC' });
       return res.data?.data || [];
     },
   });
@@ -70,9 +79,9 @@ export function DashboardPage() {
   const gold18K = latestRates?.find((r: any) => r.metalType === 'GOLD' && r.purity === 'K18');
   const silver999 = latestRates?.find((r: any) => r.metalType === 'SILVER' && r.purity === 'SILVER_999');
 
-  const totalProducts = productsData?.length || 0;
-  const publishedProducts = productsData?.filter((p: any) => p.status === 'PUBLISHED').length || 0;
-  const draftProducts = productsData?.filter((p: any) => p.status === 'DRAFT').length || 0;
+  const totalProducts = productStats?.total ?? 0;
+  const publishedProducts = productStats?.published ?? 0;
+  const draftProducts = productStats?.drafts ?? 0;
   const pendingApprovalsCount = approvalsData?.length || 0;
 
   return (
@@ -335,9 +344,9 @@ export function DashboardPage() {
             </button>
           </CardHeader>
           <CardContent>
-            {productsData && productsData.length > 0 ? (
+            {recentProducts && recentProducts.length > 0 ? (
               <div className="divide-y divide-slate-100">
-                {productsData.slice(0, 4).map((p: any) => (
+                {recentProducts.map((p: any) => (
                   <div
                     key={p.id}
                     className="py-2.5 flex items-center justify-between text-xs cursor-pointer hover:bg-slate-50 px-1 rounded transition-colors"

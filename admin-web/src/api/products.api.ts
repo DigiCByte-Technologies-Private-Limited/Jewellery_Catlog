@@ -11,4 +11,5 @@ export const productsApi = {
     httpClient.patch(`/products/${id}/status`, { status }),
   getPriceBreakdown: (id: string) => httpClient.get(`/products/${id}/price-breakdown`),
   calculatePrice: (data: any) => httpClient.post('/pricing/calculate', data),
+  getStats: () => httpClient.get('/products/stats'),
 };

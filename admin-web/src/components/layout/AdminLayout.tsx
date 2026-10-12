@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Outlet, Navigate, NavLink, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Outlet, Navigate, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { metalRatesApi } from '../../api/metal-rates.api';
@@ -37,6 +37,8 @@ import {
   VolumeX,
   Clock,
   ChevronRight,
+  ChevronLeft,
+  Menu,
 } from 'lucide-react';
 
 function getRelativeTime(dateString: string) {
@@ -54,9 +56,61 @@ function getRelativeTime(dateString: string) {
   }
 }
 
+const ALLOWED_ADMIN_ROLES = [
+  'SUPER_ADMIN',
+  'STORE_MANAGER',
+  'SALES_STAFF',
+  'CATALOG_MANAGER',
+  'INVENTORY_MANAGER',
+  'AUDITOR',
+  'MARKETING',
+];
+
 export function AdminLayout() {
   const { isAuthenticated, user, logout } = useAuthStore();
+  const isAuthorizedAdmin = isAuthenticated && !!user && ALLOWED_ADMIN_ROLES.includes(user.role);
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+
+  // Mobile off-canvas drawer state
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Desktop / Laptop collapsible sidebar state (persisted)
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('jewel_admin_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('jewel_admin_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  // Auto-close mobile drawer when navigating
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  // Keyboard shortcut Ctrl+B / Cmd+B to toggle sidebar on desktop
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleCollapse();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleCollapse]);
 
   // Notification center & alert states
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -82,6 +136,7 @@ export function AdminLayout() {
       const res = await metalRatesApi.getLatest();
       return res.data?.data || [];
     },
+    enabled: isAuthorizedAdmin,
     refetchInterval: 60000, // refresh every minute
   });
 
@@ -92,6 +147,7 @@ export function AdminLayout() {
       const res = await requestsApi.getStats();
       return res.data?.data;
     },
+    enabled: isAuthorizedAdmin,
     refetchInterval: 10000, // refresh every 10 seconds
   });
 
@@ -102,6 +158,7 @@ export function AdminLayout() {
       const res = await requestsApi.getAll({ limit: 6, sortBy: 'createdAt', sortOrder: 'DESC' });
       return res.data?.data || [];
     },
+    enabled: isAuthorizedAdmin,
     refetchInterval: 10000,
   });
 
@@ -112,6 +169,7 @@ export function AdminLayout() {
       const res = await customDesignsApi.getStats();
       return res.data?.data;
     },
+    enabled: isAuthorizedAdmin,
     refetchInterval: 15000, // refresh every 15 seconds
   });
 
@@ -122,6 +180,7 @@ export function AdminLayout() {
       const res = await wholesaleApi.getStats();
       return res.data?.data;
     },
+    enabled: isAuthorizedAdmin,
     refetchInterval: 15000, // refresh every 15 seconds
   });
 
@@ -132,6 +191,7 @@ export function AdminLayout() {
       const res = await wholesalePartnersApi.getAll({ limit: 1 });
       return res.stats;
     },
+    enabled: isAuthorizedAdmin,
     refetchInterval: 15000,
   });
 
@@ -142,6 +202,10 @@ export function AdminLayout() {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.close();
+        return;
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
@@ -202,7 +266,10 @@ export function AdminLayout() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  if (!isAuthenticated) {
+  if (!isAuthorizedAdmin) {
+    if (isAuthenticated) {
+      logout();
+    }
     return <Navigate to="/login" replace />;
   }
 
@@ -212,115 +279,253 @@ export function AdminLayout() {
     } catch {
       // ignore
     }
+    queryClient.clear();
     logout();
     navigate('/login');
   };
 
-  const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Products', path: '/products', icon: Gem },
+  interface NavCategory {
+    title: string;
+    items: {
+      label: string;
+      path: string;
+      icon: any;
+      badge?: number;
+      allowedRoles?: string[];
+    }[];
+  }
+
+  const navCategories: NavCategory[] = [
     {
-      label: 'Product Inquiries',
-      path: '/requests',
-      icon: MessageSquareQuote,
-      badge: requestStats?.new,
+      title: 'Overview',
+      items: [
+        { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+      ],
     },
     {
-      label: 'Custom Designs',
-      path: '/custom-designs',
-      icon: Sparkles,
-      badge: customDesignStats?.new,
+      title: 'Catalog & Merchandise',
+      items: [
+        { label: 'Products', path: '/products', icon: Gem },
+        { label: 'Categories', path: '/categories', icon: FolderTree },
+        { label: 'Physical Stock', path: '/inventory', icon: Boxes },
+        {
+          label: 'Live Metal Rates',
+          path: '/metal-rates',
+          icon: TrendingUp,
+          allowedRoles: ['SUPER_ADMIN', 'STORE_MANAGER', 'PRICING_MANAGER', 'ACCOUNTANT'],
+        },
+      ],
     },
     {
-      label: 'Wholesale Proposals',
-      path: '/wholesale-submissions',
-      icon: FileImage,
-      badge: wholesaleStats?.pendingReview,
+      title: 'Workshop & Operations',
+      items: [
+        {
+          label: 'Product Inquiries',
+          path: '/requests',
+          icon: MessageSquareQuote,
+          badge: requestStats?.new,
+        },
+        {
+          label: 'Custom Designs',
+          path: '/custom-designs',
+          icon: Sparkles,
+          badge: customDesignStats?.new,
+        },
+        { label: 'Karigar / Job-Work', path: '/karigar', icon: Hammer },
+        { label: 'Old Gold Exchange', path: '/old-gold', icon: Coins },
+        { label: 'Rate-Lock Bookings', path: '/bookings', icon: CalendarClock },
+      ],
     },
     {
-      label: 'Wholesale Accounts',
-      path: '/wholesale-partners',
-      icon: ShieldCheck,
-      badge: partnerAppStats?.pendingReview,
+      title: 'B2B & Clients',
+      items: [
+        {
+          label: 'Wholesale Proposals',
+          path: '/wholesale-submissions',
+          icon: FileImage,
+          badge: wholesaleStats?.pendingReview,
+        },
+        {
+          label: 'Wholesale Accounts',
+          path: '/wholesale-partners',
+          icon: ShieldCheck,
+          badge: partnerAppStats?.pendingReview,
+        },
+        { label: 'Walk-ins & Leads', path: '/enquiries', icon: PhoneCall },
+        { label: 'CRM & Clients', path: '/customers', icon: Users },
+      ],
     },
-    { label: 'Physical Stock', path: '/inventory', icon: Boxes },
-    { label: 'Karigar / Job-Work', path: '/karigar', icon: Hammer },
-    { label: 'Old Gold Exchange', path: '/old-gold', icon: Coins },
-    { label: 'Rate-Lock Bookings', path: '/bookings', icon: CalendarClock },
-    { label: 'Walk-ins & Leads', path: '/enquiries', icon: PhoneCall },
-    { label: 'CRM & Clients', path: '/customers', icon: Users },
-    { label: 'Media & Storage', path: '/storage', icon: HardDrive },
-    { label: 'ERP Subscription', path: '/subscriptions', icon: CreditCard },
-    { label: 'Categories', path: '/categories', icon: FolderTree },
-    { label: 'Metal Rates', path: '/metal-rates', icon: TrendingUp },
-    { label: 'Approvals', path: '/approvals', icon: CheckSquare },
-    { label: 'Staff & Roles', path: '/users', icon: UserCog },
-    { label: 'Audit Logs', path: '/audit-logs', icon: ShieldAlert },
+    {
+      title: 'Admin & Governance',
+      items: [
+        {
+          label: 'Approvals',
+          path: '/approvals',
+          icon: CheckSquare,
+          allowedRoles: ['SUPER_ADMIN', 'STORE_MANAGER', 'AUDITOR'],
+        },
+        {
+          label: 'Media & Storage',
+          path: '/storage',
+          icon: HardDrive,
+          allowedRoles: ['SUPER_ADMIN', 'STORE_MANAGER', 'CATALOG_MANAGER', 'MARKETING'],
+        },
+        {
+          label: 'ERP Subscription',
+          path: '/subscriptions',
+          icon: CreditCard,
+          allowedRoles: ['SUPER_ADMIN'],
+        },
+        {
+          label: 'Staff & Roles',
+          path: '/users',
+          icon: UserCog,
+          allowedRoles: ['SUPER_ADMIN', 'STORE_MANAGER'],
+        },
+        {
+          label: 'Audit Logs',
+          path: '/audit-logs',
+          icon: ShieldAlert,
+          allowedRoles: ['SUPER_ADMIN', 'STORE_MANAGER', 'AUDITOR'],
+        },
+      ],
+    },
   ];
+
+  const filteredCategories: NavCategory[] = useMemo(() => {
+    const role = user?.role;
+    return navCategories
+      .map((cat: NavCategory) => ({
+        ...cat,
+        items: cat.items.filter((item) => {
+          if (!item.allowedRoles || role === 'SUPER_ADMIN') return true;
+          return role ? item.allowedRoles.includes(role) : false;
+        }),
+      }))
+      .filter((cat) => cat.items.length > 0);
+  }, [navCategories, user?.role]);
 
   // Find 22K Gold and 999 Silver for ticker
   const gold22K = latestRates?.find((r: any) => r.metalType === 'GOLD' && r.purity === 'K22');
   const silver999 = latestRates?.find((r: any) => r.metalType === 'SILVER' && r.purity === 'SILVER_999');
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-slate-50 flex-shrink-0 flex flex-col justify-between border-r border-slate-800">
-        <div>
-          {/* Brand */}
-          <div className="p-5 border-b border-slate-800 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-bold shadow-md">
+    <div className="h-screen overflow-hidden flex bg-slate-50">
+      {/* Mobile Drawer Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 md:hidden transition-opacity"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Pinned Luxury Sidebar */}
+      <aside
+        className={`relative fixed inset-y-0 left-0 z-50 bg-slate-900 text-slate-50 flex flex-col justify-between border-r border-slate-800 transition-all duration-300 ease-in-out md:static md:translate-x-0 ${
+          mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+        } ${isCollapsed ? 'md:w-20' : 'w-72 md:w-64'}`}
+      >
+        {/* Desktop Collapse Toggle Button at Vertical Center of Sidebar Edge */}
+        <button
+          type="button"
+          onClick={toggleCollapse}
+          className="hidden md:flex absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-slate-800 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-400 items-center justify-center shadow-md hover:shadow-amber-500/20 transition-all duration-200 z-30 cursor-pointer"
+          title={isCollapsed ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
+          aria-label={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <ChevronLeft className="w-4 h-4" />
+          )}
+        </button>
+
+        {/* Pinned Brand Header */}
+        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-950/30">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-bold shadow-md shrink-0">
               👑
             </div>
-            <div>
-              <h1 className="text-base font-bold text-white tracking-wide">JewelAdmin</h1>
-              <span className="text-[10px] text-amber-400 font-mono tracking-wider uppercase">Super Admin ERP</span>
-            </div>
+            {!isCollapsed && (
+              <div className="min-w-0">
+                <h1 className="text-base font-bold text-white tracking-wide truncate">JewelAdmin</h1>
+                <span className="text-[10px] text-amber-400 font-mono tracking-wider uppercase block">Super Admin ERP</span>
+              </div>
+            )}
           </div>
-
-          {/* Navigation */}
-          <nav className="p-3 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      isActive
-                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                    }`
-                  }
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-slate-950 font-mono shadow-xs">
-                      {item.badge}
-                    </span>
-                  )}
-                </NavLink>
-              );
-            })}
-          </nav>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 md:hidden transition-colors cursor-pointer"
+            title="Close navigation"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* User Card */}
-        <div className="p-4 border-t border-slate-800/80 bg-slate-950/40">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0 pr-2">
+        {/* Independent Scrollable Navigation with 5 Categorized Sections */}
+        <nav className="p-3 space-y-4 flex-1 overflow-y-auto dark-scrollbar">
+          {filteredCategories.map((group, gIdx) => (
+            <div key={gIdx} className="space-y-1">
+              {!isCollapsed ? (
+                <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 select-none">
+                  {group.title}
+                </div>
+              ) : (
+                gIdx > 0 && <div className="border-t border-slate-800/80 my-2" />
+              )}
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    title={isCollapsed ? item.label : undefined}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all group ${
+                        isActive
+                          ? 'bg-amber-500/15 text-amber-300 border-l-2 border-amber-400 font-semibold shadow-xs'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                      } ${isCollapsed ? 'justify-center px-0' : ''}`
+                    }
+                  >
+                    <Icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span
+                        className={`${
+                          isCollapsed
+                            ? 'w-2 h-2 rounded-full bg-amber-400 shrink-0'
+                            : 'ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-slate-950 font-mono shadow-xs'
+                        }`}
+                      >
+                        {!isCollapsed && item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {/* Pinned User Profile Card at Bottom */}
+        <div className="p-3.5 border-t border-slate-800/80 bg-slate-950/60 shrink-0">
+          <div className={`flex items-center ${isCollapsed ? 'flex-col gap-2' : 'justify-between'}`}>
+            <div className={`min-w-0 ${isCollapsed ? 'text-center' : 'pr-2'}`}>
               <div className="text-xs font-semibold text-slate-200 truncate">
-                {user?.fullName || user?.email?.split('@')[0] || 'Administrator'}
+                {isCollapsed ? user?.fullName?.[0] || 'A' : user?.fullName || user?.email?.split('@')[0] || 'Administrator'}
               </div>
-              <div className="text-[10px] font-mono text-amber-400 truncate">
-                {user?.role || 'SUPER_ADMIN'}
-              </div>
+              {!isCollapsed && (
+                <div className="text-[10px] font-mono text-amber-400 truncate">
+                  {user?.role || 'SUPER_ADMIN'}
+                </div>
+              )}
             </div>
             <button
               onClick={handleLogout}
-              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors"
+              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
               title="Logout"
             >
               <LogOut className="w-4 h-4" />
@@ -330,30 +535,39 @@ export function AdminLayout() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* TopBar */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 shadow-xs">
-          {/* Live Metal Rates Ticker */}
-          <div className="flex items-center gap-4 text-xs font-mono">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-full text-amber-900">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-              <span className="font-sans font-medium text-[11px]">Live Rates:</span>
-            </div>
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* Sticky Luxury TopBar */}
+        <header className="h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-3 sm:px-6 shrink-0 shadow-2xs z-20">
+          {/* Left Controls: Hamburger + Collapse Toggle + Bullion Ticker */}
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            {/* Mobile Hamburger */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="p-2 -ml-1 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 md:hidden transition-colors cursor-pointer"
+              title="Open Navigation Menu"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500">Gold 22K:</span>
-              <span className="font-bold text-amber-700">
-                {gold22K ? `₹${Number(gold22K.ratePerGram).toLocaleString('en-IN')}/g` : '₹5,683/g'}
-              </span>
-            </div>
+            {/* Live Metal Rates Ticker (Responsive for Mobile, Tablet & Desktop) */}
+            <div className="flex items-center gap-2 sm:gap-3 text-xs font-mono">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-full text-amber-900 shadow-2xs">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
+                <span className="font-sans font-medium text-[11px] hidden sm:inline">Live Bullion:</span>
+                <span className="font-bold text-amber-900 text-[11px]">
+                  22K: {gold22K ? `₹${Number(gold22K.ratePerGram).toLocaleString('en-IN')}` : '₹5,683'}/g
+                </span>
+              </div>
 
-            <div className="w-px h-3.5 bg-slate-300" />
-
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500">Silver 999:</span>
-              <span className="font-bold text-slate-700">
-                {silver999 ? `₹${Number(silver999.ratePerGram).toLocaleString('en-IN')}/g` : '₹78/g'}
-              </span>
+              <div className="hidden lg:flex items-center gap-2">
+                <span className="text-slate-300">|</span>
+                <span className="text-slate-500">Silver 999:</span>
+                <span className="font-bold text-slate-700">
+                  {silver999 ? `₹${Number(silver999.ratePerGram).toLocaleString('en-IN')}/g` : '₹78/g'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -516,8 +730,8 @@ export function AdminLayout() {
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6">
+        {/* Main Workspace Scroll Container */}
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-7">
           <Outlet />
         </main>
       </div>

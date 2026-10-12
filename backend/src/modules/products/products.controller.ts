@@ -52,6 +52,13 @@ export class ProductsController {
     });
   }
 
+  @Get('stats')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get product catalog KPI summary and status counts' })
+  getStats() {
+    return this.productsService.getStats();
+  }
+
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get single product with relations' })

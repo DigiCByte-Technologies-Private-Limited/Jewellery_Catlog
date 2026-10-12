@@ -4,8 +4,56 @@ import {
   IsOptional,
   IsArray,
   IsUUID,
+  ValidateNested,
+  IsNumber,
 } from 'class-validator';
-import { SubmittedImageItem } from '../entities/wholesale-product-submission.entity';
+import { Type } from 'class-transformer';
+
+export class SubmittedImageItemDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @IsOptional()
+  @IsString()
+  fileId?: string;
+
+  @IsOptional()
+  @IsString()
+  originalName?: string;
+
+  @IsOptional()
+  @IsString()
+  filename?: string;
+
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @IsOptional()
+  @IsNumber()
+  sizeBytes?: number;
+
+  @IsOptional()
+  @IsNumber()
+  size?: number;
+
+  @IsOptional()
+  @IsString()
+  url?: string;
+
+  @IsOptional()
+  @IsString()
+  imageTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  imageDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  sourceReference?: string;
+}
 
 export class CreateWholesaleSubmissionDto {
   @IsString()
@@ -69,5 +117,8 @@ export class CreateWholesaleSubmissionDto {
 
   @IsOptional()
   @IsArray()
-  images?: SubmittedImageItem[];
+  @ValidateNested({ each: true })
+  @Type(() => SubmittedImageItemDto)
+  images?: SubmittedImageItemDto[];
 }
+

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   metalRatesApi,
@@ -10,8 +10,9 @@ import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
-import { Select } from '../../components/ui/Select';
 import { useToast } from '../../components/ui/Toast';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
+import { StandardPageLayout, type StatWidget } from '../../components/layout/StandardPageLayout';
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -22,7 +23,7 @@ import {
   CheckCircle2,
   Layers,
   Edit3,
-  Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 
 export function MetalRatesPage() {
@@ -30,6 +31,12 @@ export function MetalRatesPage() {
   const { toast } = useToast();
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
+
+  // Filters & Pagination
+  const [metalFilter, setMetalFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Form state for updating rate
   const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
@@ -60,15 +67,23 @@ export function MetalRatesPage() {
     },
   });
 
-  // 2. Fetch rate history
-  const { data: historyData, isLoading: isHistoryLoading } = useQuery({
-    queryKey: ['metal-rates', 'history'],
+  // 2. Fetch rate history with server SQL pagination
+  const { data: historyResponse, isLoading: isHistoryLoading } = useQuery({
+    queryKey: ['metal-rates', 'history', page, itemsPerPage, metalFilter],
     queryFn: async () => {
-      const res = await metalRatesApi.getHistory({ limit: 50 });
-      return res.data?.data || [];
+      const res = await metalRatesApi.getHistory({
+        page,
+        limit: itemsPerPage,
+        metalType: metalFilter || undefined,
+      });
+      return res.data;
     },
     enabled: activeTab === 'history',
   });
+
+  const historyData = historyResponse?.data || [];
+  const historyTotal = historyResponse?.meta?.total ?? historyData.length;
+  const historyTotalPages = historyResponse?.meta?.totalPages ?? 1;
 
   // Mutation to create/update rate
   const submitRateMutation = useMutation({
@@ -143,7 +158,6 @@ export function MetalRatesPage() {
     },
   });
 
-  // Open update modal for a specific existing rate row
   const handleOpenRowUpdate = (row: MetalRateItem) => {
     setSelectedRateId(row.id);
     setMetalType(row.metalType);
@@ -153,7 +167,6 @@ export function MetalRatesPage() {
     setIsUpdateModalOpen(true);
   };
 
-  // Preview Impact before confirming update
   const handlePreviewImpact = async () => {
     const numRate = parseFloat(ratePerGram);
     if (!ratePerGram || isNaN(numRate) || numRate <= 0) {
@@ -177,7 +190,6 @@ export function MetalRatesPage() {
     }
   };
 
-  // Handle derived rates calculation
   const handleCalculateDerived = async () => {
     if (!base24K || Number(base24K) <= 0) {
       toast({ type: 'warning', title: 'Validation', message: 'Please enter a valid 24K rate' });
@@ -191,7 +203,6 @@ export function MetalRatesPage() {
     }
   };
 
-  // Apply all derived rates
   const handleApplyAllDerived = async () => {
     if (!derivedRates.length) return;
     try {
@@ -212,6 +223,74 @@ export function MetalRatesPage() {
       toast({ type: 'error', title: 'Error', message: 'Failed to apply derived rates' });
     }
   };
+
+  // Stat computations
+  const gold22kRate = latestRates?.find((r: any) => r.metalType === 'GOLD' && r.purity === 'K22')?.ratePerGram;
+  const gold24kRate = latestRates?.find((r: any) => r.metalType === 'GOLD' && r.purity === 'K24')?.ratePerGram;
+  const silverRate = latestRates?.find((r: any) => r.metalType === 'SILVER')?.ratePerGram;
+
+  const statWidgets: StatWidget[] = [
+    {
+      label: 'Gold 22K Standard',
+      value: gold22kRate ? `₹${Number(gold22kRate).toLocaleString('en-IN')}/g` : '—',
+      subValue: '91.6% BIS Hallmark Hallmark',
+      color: 'gold',
+      onClick: () => {
+        setMetalFilter('GOLD');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Gold 24K Pure',
+      value: gold24kRate ? `₹${Number(gold24kRate).toLocaleString('en-IN')}/g` : '—',
+      subValue: '99.9% Pure Bullion Base',
+      color: 'amber',
+      onClick: () => {
+        setMetalFilter('GOLD');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Silver 999 Fine',
+      value: silverRate ? `₹${Number(silverRate).toLocaleString('en-IN')}/g` : '—',
+      subValue: 'Fine Silver Bullion / Puja',
+      color: 'slate',
+      onClick: () => {
+        setMetalFilter('SILVER');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Active Benchmarks',
+      value: latestRates?.length || 0,
+      subValue: 'Real-time catalog price engines',
+      color: 'blue',
+      onClick: () => {
+        setMetalFilter('');
+        setPage(1);
+      },
+    },
+  ];
+
+  const currentRates = latestRates || [];
+  const filteredCurrentRates = useMemo(() => {
+    return currentRates.filter((r: any) => {
+      const matchesMetal = !metalFilter || r.metalType === metalFilter;
+      const matchesSearch =
+        !search ||
+        r.metalType?.toLowerCase().includes(search.toLowerCase()) ||
+        r.purity?.toLowerCase().includes(search.toLowerCase()) ||
+        r.notes?.toLowerCase().includes(search.toLowerCase());
+      return matchesMetal && matchesSearch;
+    });
+  }, [currentRates, metalFilter, search]);
+
+  const displayData = activeTab === 'current' ? filteredCurrentRates : historyData;
+  const totalCount = activeTab === 'current' ? filteredCurrentRates.length : historyTotal;
+  const totalPages =
+    activeTab === 'current'
+      ? Math.max(1, Math.ceil(filteredCurrentRates.length / itemsPerPage))
+      : historyTotalPages;
 
   const currentColumns = [
     {
@@ -338,128 +417,169 @@ export function MetalRatesPage() {
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <span>Live Metal Benchmark Rates</span>
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 uppercase">
-              <Sparkles className="w-3 h-3 text-amber-700" />
-              Dynamic Central Engine
-            </span>
-          </h1>
-          <p className="text-slate-500 text-xs mt-0.5">
-            Admin controls benchmark rates for Gold & Silver. Product prices across catalog, cart, and checkout update dynamically.
-          </p>
-        </div>
-        <div className="flex gap-2.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['metal-rates'] })}
-          >
-            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Refresh
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setSelectedRateId(null);
-              setMetalType('GOLD');
-              setPurity('K22');
-              setRatePerGram('');
-              setNotes('');
-              setIsUpdateModalOpen(true);
-            }}
-            className="bg-amber-600 hover:bg-amber-700 text-white"
-          >
-            + Set New Rate
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200">
+  const customFilterToolbar = (
+    <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
         <button
-          className={`px-4 py-2 text-xs font-bold border-b-2 -mb-px transition-colors ${
+          onClick={() => {
+            setActiveTab('current');
+            setPage(1);
+          }}
+          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
             activeTab === 'current'
-              ? 'border-amber-600 text-amber-900 bg-amber-50/50'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'bg-white shadow text-slate-900'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
-          onClick={() => setActiveTab('current')}
         >
           Active Benchmark Rates ({latestRates?.length || 0})
         </button>
         <button
-          className={`px-4 py-2 text-xs font-bold border-b-2 -mb-px transition-colors ${
+          onClick={() => {
+            setActiveTab('history');
+            setPage(1);
+          }}
+          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
             activeTab === 'history'
-              ? 'border-amber-600 text-amber-900 bg-amber-50/50'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'bg-white shadow text-slate-900'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
-          onClick={() => setActiveTab('history')}
         >
           Rate Audit Log & History
         </button>
       </div>
 
-      {/* Current Rates View */}
-      {activeTab === 'current' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
-            <Table columns={currentColumns} data={latestRates || []} isLoading={isLoading} />
-          </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-48">
+          <CustomDropdown
+            value={metalFilter}
+            onChange={(val) => {
+              setMetalFilter(val);
+              setPage(1);
+            }}
+            placeholder="All Metals"
+            options={[
+              { value: '', label: 'All Precious Metals' },
+              { value: 'GOLD', label: 'Gold (Au)', badge: 'Au' },
+              { value: 'SILVER', label: 'Silver (Ag)', badge: 'Ag' },
+              { value: 'PLATINUM', label: 'Platinum (Pt)', badge: 'Pt' },
+            ]}
+          />
+        </div>
 
-          {/* Derived Rates Auto-Calculator */}
-          <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/40 border border-amber-200 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Calculator className="w-4 h-4 text-amber-700" />
-              <h2 className="text-sm font-bold text-amber-950">Derived Gold Rates Formula Engine (from 24K Base)</h2>
-            </div>
-            <p className="text-xs text-amber-800 mb-4">
-              Enter the benchmark 24K pure gold rate to compute mathematically exact standard rates for 22K (91.67%), 18K (75.00%), and 14K (58.33%).
-            </p>
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="w-60">
-                <Input
-                  label="24K Base Gold Rate (₹/g)"
-                  type="number"
-                  placeholder="e.g. 6200"
-                  value={base24K}
-                  onChange={(e) => setBase24K(e.target.value)}
-                />
-              </div>
-              <Button size="sm" variant="secondary" onClick={handleCalculateDerived}>
-                Compute Derived Rates
-              </Button>
-              {derivedRates.length > 0 && (
-                <Button size="sm" variant="primary" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={handleApplyAllDerived}>
-                  Apply All Purity Rates
-                </Button>
-              )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => queryClient.invalidateQueries({ queryKey: ['metal-rates'] })}
+          title="Refresh rates"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+        </Button>
+
+        {(metalFilter || search) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setMetalFilter('');
+              setSearch('');
+              setPage(1);
+            }}
+            className="text-xs text-slate-500 hover:text-slate-800"
+          >
+            <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+            Clear Filters
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <StandardPageLayout
+        title="Live Metal Benchmark Rates"
+        description="Central benchmark rates for Gold & Silver. Product prices across catalog, cart, and checkout update dynamically"
+        badge="Dynamic Central Engine"
+        stats={statWidgets}
+        searchPlaceholder="Search rates by metal, purity or notes..."
+        searchValue={search}
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPage(1);
+        }}
+        customFilters={customFilterToolbar}
+        primaryAction={{
+          label: 'Set New Rate',
+          onClick: () => {
+            setSelectedRateId(null);
+            setMetalType('GOLD');
+            setPurity('K22');
+            setRatePerGram('');
+            setNotes('');
+            setIsUpdateModalOpen(true);
+          },
+        }}
+        currentPage={page}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        onPageChange={setPage}
+        viewMode="table"
+        tableContent={
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+              <Table
+                columns={currentColumns}
+                data={displayData}
+                isLoading={activeTab === 'current' ? isLoading : isHistoryLoading}
+              />
             </div>
 
-            {derivedRates.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                {derivedRates.map((d) => (
-                  <div key={d.purity} className="bg-white p-3 rounded-lg border border-amber-200 shadow-2xs">
-                    <div className="text-[11px] font-semibold text-slate-500">{d.label}</div>
-                    <div className="text-base font-bold text-amber-900 font-mono mt-0.5">₹{d.ratePerGram} / g</div>
-                    <div className="text-[10px] text-slate-400 font-mono">Factor: {(d.factor * 100).toFixed(2)}%</div>
+            {/* Derived Rates Auto-Calculator */}
+            {activeTab === 'current' && (
+              <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/40 border border-amber-200 rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calculator className="w-4 h-4 text-amber-700" />
+                  <h2 className="text-sm font-bold text-amber-950">Derived Gold Rates Formula Engine (from 24K Base)</h2>
+                </div>
+                <p className="text-xs text-amber-800 mb-4">
+                  Enter the benchmark 24K pure gold rate to compute mathematically exact standard rates for 22K (91.67%), 18K (75.00%), and 14K (58.33%).
+                </p>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="w-60">
+                    <Input
+                      label="24K Base Gold Rate (₹/g)"
+                      type="number"
+                      placeholder="e.g. 6200"
+                      value={base24K}
+                      onChange={(e) => setBase24K(e.target.value)}
+                    />
                   </div>
-                ))}
+                  <Button size="sm" variant="secondary" onClick={handleCalculateDerived}>
+                    Compute Derived Rates
+                  </Button>
+                  {derivedRates.length > 0 && (
+                    <Button size="sm" variant="primary" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={handleApplyAllDerived}>
+                      Apply All Purity Rates
+                    </Button>
+                  )}
+                </div>
+
+                {derivedRates.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                    {derivedRates.map((d) => (
+                      <div key={d.purity} className="bg-white p-3 rounded-lg border border-amber-200 shadow-sm">
+                        <div className="text-[11px] font-semibold text-slate-500">{d.label}</div>
+                        <div className="text-base font-bold text-amber-900 font-mono mt-0.5">₹{d.ratePerGram} / g</div>
+                        <div className="text-[10px] text-slate-400 font-mono">Factor: {(d.factor * 100).toFixed(2)}%</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* History Tab */}
-      {activeTab === 'history' && (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
-          <Table columns={currentColumns} data={historyData || []} isLoading={isHistoryLoading} />
-        </div>
-      )}
+        }
+      />
 
       {/* STEP 1: Update Rate Input Modal */}
       <Modal
@@ -491,43 +611,48 @@ export function MetalRatesPage() {
             </div>
           </div>
 
-          <Select
-            label="Precious Metal"
-            value={metalType}
-            disabled={Boolean(selectedRateId)}
-            onChange={(e) => {
-              const val = e.target.value;
-              setMetalType(val);
-              setPurity(val === 'GOLD' ? 'K22' : val === 'SILVER' ? 'SILVER_999' : 'PLATINUM_950');
-            }}
-            options={[
-              { label: 'Gold (Au)', value: 'GOLD' },
-              { label: 'Silver (Ag)', value: 'SILVER' },
-              { label: 'Platinum (Pt)', value: 'PLATINUM' },
-            ]}
-          />
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Precious Metal</label>
+            <CustomDropdown
+              value={metalType}
+              onChange={(val) => {
+                if (selectedRateId) return;
+                setMetalType(val);
+                setPurity(val === 'GOLD' ? 'K22' : val === 'SILVER' ? 'SILVER_999' : 'PLATINUM_950');
+              }}
+              options={[
+                { label: 'Gold (Au)', value: 'GOLD' },
+                { label: 'Silver (Ag)', value: 'SILVER' },
+                { label: 'Platinum (Pt)', value: 'PLATINUM' },
+              ]}
+            />
+          </div>
 
-          <Select
-            label="Purity Level"
-            value={purity}
-            disabled={Boolean(selectedRateId)}
-            onChange={(e) => setPurity(e.target.value)}
-            options={
-              metalType === 'GOLD'
-                ? [
-                    { label: '24K (99.9% Pure Investment Gold)', value: 'K24' },
-                    { label: '22K (91.6% BIS Hallmark Standard)', value: 'K22' },
-                    { label: '18K (75.0% Fine Diamond Jewelry)', value: 'K18' },
-                    { label: '14K (58.3% Fine Modern Jewelry)', value: 'K14' },
-                  ]
-                : metalType === 'SILVER'
-                ? [
-                    { label: '999 Fine Silver (Puja / Bullion)', value: 'SILVER_999' },
-                    { label: '925 Sterling Silver (Hallmarked)', value: 'SILVER_925' },
-                  ]
-                : [{ label: '950 Platinum Standard', value: 'PLATINUM_950' }]
-            }
-          />
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Purity Level</label>
+            <CustomDropdown
+              value={purity}
+              onChange={(val) => {
+                if (selectedRateId) return;
+                setPurity(val);
+              }}
+              options={
+                metalType === 'GOLD'
+                  ? [
+                      { label: '24K (99.9% Pure Investment Gold)', value: 'K24' },
+                      { label: '22K (91.6% BIS Hallmark Standard)', value: 'K22' },
+                      { label: '18K (75.0% Fine Diamond Jewelry)', value: 'K18' },
+                      { label: '14K (58.3% Fine Modern Jewelry)', value: 'K14' },
+                    ]
+                  : metalType === 'SILVER'
+                  ? [
+                      { label: '999 Fine Silver (Puja / Bullion)', value: 'SILVER_999' },
+                      { label: '925 Sterling Silver (Hallmarked)', value: 'SILVER_925' },
+                    ]
+                  : [{ label: '950 Platinum Standard', value: 'PLATINUM_950' }]
+              }
+            />
+          </div>
 
           <Input
             label="New Benchmark Rate per Gram (₹) *"
@@ -592,7 +717,6 @@ export function MetalRatesPage() {
               </div>
             </div>
 
-            {/* Impact Metric Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
               <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50">
                 <div className="text-slate-500 font-medium text-[11px]">Current Rate</div>
@@ -628,7 +752,6 @@ export function MetalRatesPage() {
               </div>
             </div>
 
-            {/* Sample Affected Products */}
             {impactData.sampleProducts && impactData.sampleProducts.length > 0 && (
               <div>
                 <div className="text-xs font-bold text-slate-800 mb-2 flex items-center justify-between">
@@ -708,6 +831,6 @@ export function MetalRatesPage() {
           />
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

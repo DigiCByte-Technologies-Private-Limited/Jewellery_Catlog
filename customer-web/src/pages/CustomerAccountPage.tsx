@@ -22,6 +22,14 @@ import {
   type MyRequestItem,
   type MyCustomDesignItem,
 } from '../api/customer-auth.api';
+import {
+  isValidName,
+  isValidPhone,
+  isValidPincode,
+  sanitizePhoneNumber,
+  getTodayDateString,
+  isNotFutureDate,
+} from '../utils/validation';
 
 export const CustomerAccountPage: React.FC = () => {
   const navigate = useNavigate();
@@ -48,6 +56,17 @@ export const CustomerAccountPage: React.FC = () => {
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null,
   );
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   // Tab 2 & 3: Inquiries & Custom Designs
   const [inquiries, setInquiries] = useState<MyRequestItem[]>([]);
@@ -151,18 +170,87 @@ export const CustomerAccountPage: React.FC = () => {
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileMsg(null);
+    setFieldErrors({});
+
+    const errors: Record<string, string> = {};
+
+    // 1. Full name validation
+    if (!fullName.trim()) {
+      errors.fullName = 'Full name is required.';
+    } else if (!isValidName(fullName)) {
+      errors.fullName = 'Please enter a valid full name (minimum 2 characters).';
+    }
+
+    // 2. Primary phone validation
+    const cleanPhone = sanitizePhoneNumber(phone);
+    if (!phone.trim()) {
+      errors.phone = 'Primary mobile phone is required.';
+    } else if (!isValidPhone(cleanPhone)) {
+      errors.phone = 'Please provide a valid 10-digit mobile number.';
+    }
+
+    // 3. Optional alternate phone validation
+    let cleanAltPhone: string | undefined = undefined;
+    if (altPhone.trim()) {
+      cleanAltPhone = sanitizePhoneNumber(altPhone);
+      if (!isValidPhone(cleanAltPhone)) {
+        errors.altPhone = 'Alternative phone must be a valid 10-digit number.';
+      }
+    }
+
+    // 4. Optional WhatsApp number validation
+    let cleanWhatsapp: string | undefined = undefined;
+    if (whatsappNumber.trim()) {
+      cleanWhatsapp = sanitizePhoneNumber(whatsappNumber);
+      if (!isValidPhone(cleanWhatsapp)) {
+        errors.whatsappNumber = 'WhatsApp number must be a valid 10-digit number.';
+      }
+    }
+
+    // 5. Address validation
+    if (!address.trim() || address.trim().length < 5) {
+      errors.address = 'Please provide a complete delivery street address (minimum 5 characters).';
+    }
+
+    // 6. PIN Code validation
+    const cleanPincode = pincode.replace(/\D/g, '');
+    if (!cleanPincode) {
+      errors.pincode = 'PIN Code is required.';
+    } else if (!isValidPincode(cleanPincode)) {
+      errors.pincode = 'Please enter a valid 6-digit postal PIN code.';
+    }
+
+    // 7. Date of birth validation
+    if (dob && !isNotFutureDate(dob)) {
+      errors.dob = 'Date of birth cannot be in the future.';
+    }
+
+    // 8. Anniversary date validation
+    if (anniversary && !isNotFutureDate(anniversary)) {
+      errors.anniversary = 'Anniversary date cannot be in the future.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setProfileMsg({
+        type: 'error',
+        text: 'Please review and correct the highlighted fields before saving.',
+      });
+      return;
+    }
+
     setIsSavingProfile(true);
 
     try {
       const payload: CustomerProfileUpdatePayload = {
         fullName: fullName.trim(),
-        phone: phone.trim(),
-        altPhone: altPhone.trim() || undefined,
-        whatsappNumber: whatsappNumber.trim() || undefined,
+        phone: cleanPhone,
+        altPhone: cleanAltPhone,
+        whatsappNumber: cleanWhatsapp,
         address: address.trim(),
         city: city.trim(),
         state: state.trim(),
-        pincode: pincode.trim(),
+        pincode: cleanPincode,
         dateOfBirth: dob || undefined,
         anniversaryDate: anniversary || undefined,
       };
@@ -176,9 +264,10 @@ export const CustomerAccountPage: React.FC = () => {
         text: 'Your patron profile has been updated successfully.',
       });
     } catch (err: any) {
+      const apiMsg = err.response?.data?.message || 'Failed to update profile. Please try again.';
       setProfileMsg({
         type: 'error',
-        text: err.response?.data?.message || 'Failed to update profile. Please try again.',
+        text: Array.isArray(apiMsg) ? apiMsg.join(', ') : apiMsg,
       });
     } finally {
       setIsSavingProfile(false);
@@ -360,9 +449,19 @@ export const CustomerAccountPage: React.FC = () => {
                     type="text"
                     required
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white text-xs text-stone-900 outline-none transition"
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      clearFieldError('fullName');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-xs text-stone-900 outline-none transition ${
+                      fieldErrors.fullName
+                        ? 'bg-white border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white'
+                    }`}
                   />
+                  {fieldErrors.fullName && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.fullName}</p>
+                  )}
                 </div>
 
                 <div>
@@ -387,10 +486,21 @@ export const CustomerAccountPage: React.FC = () => {
                   <input
                     type="tel"
                     required
+                    maxLength={14}
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white text-xs text-stone-900 outline-none transition"
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      clearFieldError('phone');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-xs text-stone-900 outline-none transition ${
+                      fieldErrors.phone
+                        ? 'bg-white border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white'
+                    }`}
                   />
+                  {fieldErrors.phone && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.phone}</p>
+                  )}
                 </div>
 
                 <div>
@@ -399,11 +509,22 @@ export const CustomerAccountPage: React.FC = () => {
                   </label>
                   <input
                     type="tel"
+                    maxLength={14}
                     placeholder="Optional"
                     value={altPhone}
-                    onChange={(e) => setAltPhone(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white text-xs text-stone-900 outline-none transition"
+                    onChange={(e) => {
+                      setAltPhone(e.target.value);
+                      clearFieldError('altPhone');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-xs text-stone-900 outline-none transition ${
+                      fieldErrors.altPhone
+                        ? 'bg-white border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white'
+                    }`}
                   />
+                  {fieldErrors.altPhone && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.altPhone}</p>
+                  )}
                 </div>
 
                 <div>
@@ -412,11 +533,22 @@ export const CustomerAccountPage: React.FC = () => {
                   </label>
                   <input
                     type="tel"
+                    maxLength={14}
                     placeholder="For instant quotes"
                     value={whatsappNumber}
-                    onChange={(e) => setWhatsappNumber(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white text-xs text-stone-900 outline-none transition"
+                    onChange={(e) => {
+                      setWhatsappNumber(e.target.value);
+                      clearFieldError('whatsappNumber');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-xs text-stone-900 outline-none transition ${
+                      fieldErrors.whatsappNumber
+                        ? 'bg-white border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white'
+                    }`}
                   />
+                  {fieldErrors.whatsappNumber && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.whatsappNumber}</p>
+                  )}
                 </div>
               </div>
 
@@ -428,10 +560,20 @@ export const CustomerAccountPage: React.FC = () => {
                   rows={2}
                   required
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    clearFieldError('address');
+                  }}
                   placeholder="Flat/House, Building Name, Street / Road, Area"
-                  className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white text-xs text-stone-900 outline-none transition resize-none"
+                  className={`w-full px-4 py-2.5 rounded-xl border text-xs text-stone-900 outline-none transition resize-none ${
+                    fieldErrors.address
+                      ? 'bg-white border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                      : 'bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white'
+                  }`}
                 />
+                {fieldErrors.address && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.address}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -470,9 +612,19 @@ export const CustomerAccountPage: React.FC = () => {
                     required
                     maxLength={6}
                     value={pincode}
-                    onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white text-xs text-stone-900 outline-none transition"
+                    onChange={(e) => {
+                      setPincode(e.target.value.replace(/\D/g, ''));
+                      clearFieldError('pincode');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-xs text-stone-900 outline-none transition ${
+                      fieldErrors.pincode
+                        ? 'bg-white border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white'
+                    }`}
                   />
+                  {fieldErrors.pincode && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.pincode}</p>
+                  )}
                 </div>
               </div>
 
@@ -484,10 +636,21 @@ export const CustomerAccountPage: React.FC = () => {
                   </label>
                   <input
                     type="date"
+                    max={getTodayDateString()}
                     value={dob}
-                    onChange={(e) => setDob(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white text-xs text-stone-900 outline-none transition"
+                    onChange={(e) => {
+                      setDob(e.target.value);
+                      clearFieldError('dob');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-xs text-stone-900 outline-none transition ${
+                      fieldErrors.dob
+                        ? 'bg-white border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white'
+                    }`}
                   />
+                  {fieldErrors.dob && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.dob}</p>
+                  )}
                 </div>
 
                 <div>
@@ -497,10 +660,21 @@ export const CustomerAccountPage: React.FC = () => {
                   </label>
                   <input
                     type="date"
+                    max={getTodayDateString()}
                     value={anniversary}
-                    onChange={(e) => setAnniversary(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white text-xs text-stone-900 outline-none transition"
+                    onChange={(e) => {
+                      setAnniversary(e.target.value);
+                      clearFieldError('anniversary');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-xs text-stone-900 outline-none transition ${
+                      fieldErrors.anniversary
+                        ? 'bg-white border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'bg-stone-50 border border-stone-200 focus:border-[#8C6A28] focus:bg-white'
+                    }`}
                   />
+                  {fieldErrors.anniversary && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.anniversary}</p>
+                  )}
                 </div>
               </div>
 

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { productsApi } from '../../api/products.api';
 import { metalRatesApi } from '../../api/metal-rates.api';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
-import { Select } from '../../components/ui/Select';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { Modal } from '../../components/ui/Modal';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useToast } from '../../components/ui/Toast';
 import {
   StandardPageLayout,
@@ -20,28 +21,49 @@ import {
   Trash2,
   Sparkles,
   Crown,
-  Gem,
-  CheckCircle2,
-  Scale,
-  Clock,
   Download,
   Flame,
+  RotateCcw,
 } from 'lucide-react';
 
 export function ProductsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [search, setSearch] = useState('');
-  const [metalType, setMetalType] = useState('');
-  const [purity, setPurity] = useState('');
-  const [weightRange, setWeightRange] = useState('');
-  const [status, setStatus] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [metalType, setMetalType] = useState(searchParams.get('metalType') || '');
+  const [purity, setPurity] = useState(searchParams.get('purity') || '');
+  const [weightRange, setWeightRange] = useState(searchParams.get('weightRange') || '');
+  const [status, setStatus] = useState(searchParams.get('status') || '');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(Number(searchParams.get('limit')) || 10);
   const [priceBreakdownData, setPriceBreakdownData] = useState<any>(null);
+  const [productToDelete, setProductToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Sync state helper to update URL search params
+  const updateFilterParam = (key: string, val: string) => {
+    setCurrentPage(1);
+    const params = new URLSearchParams(searchParams);
+    if (val) {
+      params.set(key, val);
+    } else {
+      params.delete(key);
+    }
+    setSearchParams(params);
+  };
+
+  const resetAllFilters = () => {
+    setSearch('');
+    setMetalType('');
+    setPurity('');
+    setWeightRange('');
+    setStatus('');
+    setCurrentPage(1);
+    setSearchParams({});
+  };
 
   // Queries
   const { data: response, isLoading } = useQuery({
@@ -65,6 +87,20 @@ export function ProductsPage() {
     queryFn: async () => {
       const res = await metalRatesApi.getLatest();
       return res.data?.data || [];
+    },
+  });
+
+  // Query catalog KPI stats
+  const { data: statsData } = useQuery({
+    queryKey: ['products', 'stats'],
+    queryFn: async () => {
+      try {
+        const res = await productsApi.getStats();
+        return res.data?.data;
+      } catch (err) {
+        console.warn('Could not fetch products stats:', err);
+        return null;
+      }
     },
   });
 
@@ -144,34 +180,73 @@ export function ProductsPage() {
     (p: any) => p.status === 'DRAFT' || p.status === 'PENDING_APPROVAL'
   ).length;
 
+  const totalCatalogCount = statsData?.total ?? totalItems;
+  const publishedCatalogCount = statsData?.published ?? publishedCount;
+  const pendingCatalogCount = statsData?.drafts ?? pendingCount;
+  const goldCatalogCount = statsData?.gold;
+  const totalCatalogWeight = statsData?.totalWeight ?? totalGrossWeight;
+
+  const hasActiveFilters = Boolean(
+    search || metalType || purity || weightRange || status
+  );
+
   const stats: StatWidget[] = [
     {
       label: 'Catalog SKUs',
-      value: totalItems.toLocaleString('en-IN'),
+      value: totalCatalogCount.toLocaleString('en-IN'),
       subtext: 'Master registered designs',
       variant: 'gold',
-      watermarkIcon: <Gem className="w-16 h-16" />,
+      clickable: true,
+      isActive: !hasActiveFilters,
+      actionHint: !hasActiveFilters ? 'Showing All' : 'Reset & Show All',
+      onClick: resetAllFilters,
     },
     {
       label: 'Showroom Published',
-      value: publishedCount.toLocaleString('en-IN'),
+      value: publishedCatalogCount.toLocaleString('en-IN'),
       subtext: 'Live on customer catalog & POS',
       variant: 'emerald',
-      watermarkIcon: <CheckCircle2 className="w-16 h-16" />,
+      clickable: true,
+      isActive: status === 'PUBLISHED',
+      actionHint: status === 'PUBLISHED' ? 'Active Filter (Click to Reset)' : 'Click to Filter Published',
+      onClick: () => {
+        const next = status === 'PUBLISHED' ? '' : 'PUBLISHED';
+        setStatus(next);
+        updateFilterParam('status', next);
+      },
     },
     {
-      label: 'Total Gold Weight',
-      value: `${totalGrossWeight.toFixed(2)} g`,
-      subtext: `~${(totalGrossWeight / 1000).toFixed(3)} kg in catalog pieces`,
+      label: 'Gold Collection',
+      value: goldCatalogCount !== undefined ? goldCatalogCount.toLocaleString('en-IN') : `${totalGrossWeight.toFixed(1)}g`,
+      subtext: `~${(totalCatalogWeight / 1000).toFixed(2)} kg precious metal pieces`,
       variant: 'blue',
-      watermarkIcon: <Scale className="w-16 h-16" />,
+      clickable: true,
+      isActive: metalType === 'GOLD',
+      actionHint: metalType === 'GOLD' ? 'Active Filter (Click to Reset)' : 'Click to Filter Gold',
+      onClick: () => {
+        const next = metalType === 'GOLD' ? '' : 'GOLD';
+        setMetalType(next);
+        setPurity('');
+        updateFilterParam('metalType', next);
+      },
     },
     {
       label: 'Drafts & In-Review',
-      value: pendingCount.toLocaleString('en-IN'),
+      value: pendingCatalogCount.toLocaleString('en-IN'),
       subtext: 'Awaiting pricing / photo approval',
       variant: 'purple',
-      watermarkIcon: <Clock className="w-16 h-16" />,
+      clickable: true,
+      isActive: status === 'DRAFT' || status === 'PENDING_APPROVAL',
+      actionHint:
+        status === 'DRAFT' || status === 'PENDING_APPROVAL'
+          ? 'Active Filter (Click to Reset)'
+          : 'Click to Filter Drafts',
+      onClick: () => {
+        const next =
+          status === 'DRAFT' || status === 'PENDING_APPROVAL' ? '' : 'DRAFT';
+        setStatus(next);
+        updateFilterParam('status', next);
+      },
     },
   ];
 
@@ -315,11 +390,7 @@ export function ProductsPage() {
             variant="ghost"
             className="h-8 w-8 p-0"
             title="Delete"
-            onClick={() => {
-              if (confirm(`Are you sure you want to delete ${r.name}?`)) {
-                deleteMutation.mutate(r.id);
-              }
-            }}
+            onClick={() => setProductToDelete({ id: r.id, name: r.name })}
           >
             <Trash2 className="w-3.5 h-3.5 text-rose-600" />
           </Button>
@@ -481,118 +552,110 @@ export function ProductsPage() {
       searchValue={search}
       onSearchChange={(val) => {
         setSearch(val);
-        setCurrentPage(1);
+        updateFilterParam('search', val);
       }}
       viewMode={viewMode}
       onViewModeChange={setViewMode}
       showViewToggle={true}
       filterSlot={
-        <div className="flex gap-2.5 flex-wrap sm:flex-nowrap">
-          <div className="w-36">
-            <Select
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 justify-between w-full">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 flex-1">
+            <CustomDropdown
               value={metalType}
-              onChange={(e) => {
-                setMetalType(e.target.value);
+              onChange={(val) => {
+                setMetalType(val);
                 setPurity('');
-                setCurrentPage(1);
+                updateFilterParam('metalType', val);
               }}
+              placeholder="All Metals"
               options={[
                 { label: 'All Metals', value: '' },
-                { label: 'Gold', value: 'GOLD' },
-                { label: 'Silver', value: 'SILVER' },
-                { label: 'Platinum', value: 'PLATINUM' },
+                { label: 'Gold', value: 'GOLD', badge: 'AU' },
+                { label: 'Silver', value: 'SILVER', badge: 'AG' },
+                { label: 'Platinum', value: 'PLATINUM', badge: 'PT' },
               ]}
             />
-          </div>
 
-          <div className="w-36">
-            <Select
+            <CustomDropdown
               value={purity}
-              onChange={(e) => {
-                setPurity(e.target.value);
-                setCurrentPage(1);
+              onChange={(val) => {
+                setPurity(val);
+                updateFilterParam('purity', val);
               }}
+              placeholder="All Purities"
               options={
                 metalType === 'GOLD'
                   ? [
                       { label: 'All Gold Purities', value: '' },
-                      { label: '24K (999)', value: 'K24' },
-                      { label: '22K (916)', value: 'K22' },
-                      { label: '18K (750)', value: 'K18' },
-                      { label: '14K (585)', value: 'K14' },
+                      { label: '24K (999)', value: 'K24', badge: '99.9%' },
+                      { label: '22K (916)', value: 'K22', badge: '91.6%' },
+                      { label: '18K (750)', value: 'K18', badge: '75.0%' },
+                      { label: '14K (585)', value: 'K14', badge: '58.5%' },
                     ]
                   : metalType === 'SILVER'
                   ? [
                       { label: 'All Silver Purities', value: '' },
-                      { label: '999 Fine', value: 'SILVER_999' },
-                      { label: '925 Sterling', value: 'SILVER_925' },
+                      { label: '999 Fine Silver', value: 'SILVER_999', badge: '99.9%' },
+                      { label: '925 Sterling Silver', value: 'SILVER_925', badge: '92.5%' },
                     ]
                   : metalType === 'PLATINUM'
                   ? [
                       { label: 'All Platinum Purities', value: '' },
-                      { label: '950 Platinum', value: 'PLATINUM_950' },
+                      { label: '950 Platinum', value: 'PLATINUM_950', badge: '95.0%' },
                     ]
                   : [
                       { label: 'All Purities', value: '' },
-                      { label: 'Gold 24K', value: 'K24' },
-                      { label: 'Gold 22K', value: 'K22' },
-                      { label: 'Gold 18K', value: 'K18' },
-                      { label: 'Silver 999', value: 'SILVER_999' },
-                      { label: 'Silver 925', value: 'SILVER_925' },
+                      { label: 'Gold 24K', value: 'K24', badge: '999' },
+                      { label: 'Gold 22K', value: 'K22', badge: '916' },
+                      { label: 'Gold 18K', value: 'K18', badge: '750' },
+                      { label: 'Silver 999', value: 'SILVER_999', badge: 'Fine' },
+                      { label: 'Silver 925', value: 'SILVER_925', badge: 'Sterling' },
                     ]
               }
             />
-          </div>
 
-          <div className="w-36">
-            <Select
+            <CustomDropdown
               value={weightRange}
-              onChange={(e) => {
-                setWeightRange(e.target.value);
-                setCurrentPage(1);
+              onChange={(val) => {
+                setWeightRange(val);
+                updateFilterParam('weightRange', val);
               }}
+              placeholder="All Weights"
               options={[
                 { label: 'All Weights', value: '' },
-                { label: '0 – 5g', value: '0-5' },
-                { label: '5 – 10g', value: '5-10' },
-                { label: '10 – 20g', value: '10-20' },
-                { label: '20 – 50g', value: '20-50' },
-                { label: '50g+', value: '50+' },
+                { label: '0 – 5g', value: '0-5', badge: 'Light' },
+                { label: '5 – 10g', value: '5-10', badge: 'Medium' },
+                { label: '10 – 20g', value: '10-20', badge: 'Standard' },
+                { label: '20 – 50g', value: '20-50', badge: 'Heavy' },
+                { label: '50g+', value: '50+', badge: 'Bridal' },
               ]}
             />
-          </div>
 
-          <div className="w-36">
-            <Select
+            <CustomDropdown
               value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
-                setCurrentPage(1);
+              onChange={(val) => {
+                setStatus(val);
+                updateFilterParam('status', val);
               }}
+              placeholder="All Statuses"
               options={[
                 { label: 'All Statuses', value: '' },
-                { label: 'Published', value: 'PUBLISHED' },
-                { label: 'Draft', value: 'DRAFT' },
-                { label: 'Pending Approval', value: 'PENDING_APPROVAL' },
-                { label: 'Archived', value: 'ARCHIVED' },
+                { label: 'Published', value: 'PUBLISHED', badge: 'Live' },
+                { label: 'Draft', value: 'DRAFT', badge: 'Spec' },
+                { label: 'Pending Approval', value: 'PENDING_APPROVAL', badge: 'Review' },
+                { label: 'Archived', value: 'ARCHIVED', badge: 'Closed' },
               ]}
             />
           </div>
 
-          {(search || metalType || purity || weightRange || status) && (
+          {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => {
-                setSearch('');
-                setMetalType('');
-                setPurity('');
-                setWeightRange('');
-                setStatus('');
-                setCurrentPage(1);
-              }}
-              className="text-xs text-rose-600 hover:text-rose-800 font-medium px-2 py-1"
+              onClick={resetAllFilters}
+              className="self-end sm:self-center text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 font-semibold px-3 py-1.5 rounded-lg shrink-0 flex items-center gap-1 transition-colors cursor-pointer"
             >
-              Clear
+              <RotateCcw className="w-3 h-3" />
+              <span>Clear</span>
             </button>
           )}
         </div>
@@ -612,6 +675,7 @@ export function ProductsPage() {
         onItemsPerPageChange: (size) => {
           setItemsPerPage(size);
           setCurrentPage(1);
+          updateFilterParam('limit', size === 10 ? '' : String(size));
         },
       }}
       footerInfo={
@@ -700,6 +764,21 @@ export function ProductsPage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!productToDelete}
+        onClose={() => setProductToDelete(null)}
+        onConfirm={() => {
+          if (productToDelete) {
+            deleteMutation.mutate(productToDelete.id);
+            setProductToDelete(null);
+          }
+        }}
+        title="Delete Jewelry Product"
+        message={`Are you sure you want to permanently remove "${productToDelete?.name}" from your catalog? This action cannot be undone.`}
+        confirmText="Delete Product"
+        isLoading={deleteMutation.isPending}
+      />
     </StandardPageLayout>
   );
 }

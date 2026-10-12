@@ -2,20 +2,23 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryApi } from '../../api/inventory.api';
 import { productsApi } from '../../api/products.api';
+import {
+  StandardPageLayout,
+  type StatWidget,
+} from '../../components/layout/StandardPageLayout';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
-import { Card, CardContent } from '../../components/ui/Card';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { useToast } from '../../components/ui/Toast';
 import {
   Plus,
   ArrowRightLeft,
   FileText,
   RotateCcw,
-  Search,
   Building2,
 } from 'lucide-react';
 
@@ -25,6 +28,9 @@ export function InventoryPage() {
 
   const [search, setSearch] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const limit = 10;
 
   // Modals state
   const [isStockInOpen, setIsStockInOpen] = useState(false);
@@ -67,12 +73,14 @@ export function InventoryPage() {
   });
 
   const { data: tagsResponse, isLoading: tagsLoading } = useQuery({
-    queryKey: ['inventory', 'tags', selectedLocation, search],
+    queryKey: ['inventory', 'tags', selectedLocation, statusFilter, search, page, limit],
     queryFn: async () => {
       const res = await inventoryApi.getItemTags({
         locationId: selectedLocation || undefined,
+        status: statusFilter ? (statusFilter as any) : undefined,
         search: search || undefined,
-        limit: 100,
+        page,
+        limit,
       });
       return res.data;
     },
@@ -265,91 +273,135 @@ export function InventoryPage() {
     },
   ];
 
+  const total = tagsResponse?.meta?.total || tags.length;
+  const totalPages = tagsResponse?.meta?.totalPages || Math.ceil(total / limit) || 1;
+
+  const statWidgets: StatWidget[] = [
+    {
+      label: 'Pieces in Vault',
+      value: summary?.totalPieces || total,
+      subtext: 'Individual tagged pieces',
+      variant: 'default',
+      onClick: () => {
+        setStatusFilter('');
+        setSelectedLocation('');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Gross Gold Weight',
+      value: `${Number(summary?.totalGrossWeight || 0).toFixed(2)}g`,
+      subtext: 'Physical showroom balance',
+      variant: 'gold',
+    },
+    {
+      label: 'Fine Gold Weight',
+      value: `${Number(summary?.totalNetWeight || 0).toFixed(2)}g`,
+      subtext: 'Net fine gold weight',
+      variant: 'emerald',
+    },
+    {
+      label: 'Storage Locations',
+      value: locations?.length || 0,
+      subtext: 'Vaults, counters & depot',
+      variant: 'blue',
+    },
+  ];
+
+  const filterSlot = (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="w-60">
+        <CustomDropdown
+          value={selectedLocation}
+          onChange={(val) => {
+            setSelectedLocation(val);
+            setPage(1);
+          }}
+          placeholder="All Storage Locations"
+          options={[
+            { value: '', label: 'All Storage Locations' },
+            ...(locations?.map((loc: any) => ({
+              value: loc.id,
+              label: loc.name,
+              badge: loc.code,
+            })) || []),
+          ]}
+        />
+      </div>
+
+      <div className="w-52">
+        <CustomDropdown
+          value={statusFilter}
+          onChange={(val) => {
+            setStatusFilter(val);
+            setPage(1);
+          }}
+          placeholder="All Piece Statuses"
+          options={[
+            { value: '', label: 'All Piece Statuses' },
+            { value: 'IN_STOCK', label: 'In Stock', badge: 'Vault' },
+            { value: 'ON_MEMO', label: 'On Memo', badge: 'Memo' },
+            { value: 'BOOKED', label: 'Booked', badge: 'Booked' },
+            { value: 'SOLD', label: 'Sold', badge: 'Sold' },
+            { value: 'WITH_KARIGAR', label: 'With Karigar', badge: 'Job' },
+          ]}
+        />
+      </div>
+
+      {(selectedLocation || statusFilter || search) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setSelectedLocation('');
+            setStatusFilter('');
+            setSearch('');
+            setPage(1);
+          }}
+          className="text-xs text-slate-500 hover:text-slate-800"
+        >
+          <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+          Clear Filters
+        </Button>
+      )}
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Physical Stock & Item Tags</h1>
-          <p className="text-slate-500 text-sm">Individual piece tracking with BIS Hallmark HUID and multi-location balances</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsLocationModalOpen(true)}>
-            <Building2 className="w-4 h-4 mr-1.5" /> + Location
-          </Button>
-          <Button onClick={() => setIsStockInOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" /> Stock In Physical Piece
-          </Button>
-        </div>
-      </div>
-
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-white border-slate-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Pieces in Vault</div>
-            <div className="text-2xl font-extrabold text-slate-900 mt-1 font-mono">
-              {summary?.totalPieces || tags.length}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-amber-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Gross Gold Weight</div>
-            <div className="text-2xl font-extrabold text-amber-950 mt-1 font-mono">
-              {Number(summary?.totalGrossWeight || 0).toFixed(3)} <span className="text-xs font-sans font-normal">g</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-amber-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Net Fine Gold Weight</div>
-            <div className="text-2xl font-extrabold text-amber-900 mt-1 font-mono">
-              {Number(summary?.totalNetWeight || 0).toFixed(3)} <span className="text-xs font-sans font-normal">g</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-slate-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Locations</div>
-            <div className="text-2xl font-extrabold text-slate-800 mt-1 font-mono">
-              {locations?.length || 0}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center">
-        <div className="flex-1 min-w-[200px] relative">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2 border rounded-md text-sm border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            placeholder="Search by HUID, barcode tag, or product name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="w-56">
-          <Select
-            value={selectedLocation}
-            onChange={(e) => setSelectedLocation(e.target.value)}
-            options={[
-              { label: 'All Storage Locations', value: '' },
-              ...(locations?.map((loc: any) => ({ label: `${loc.name} (${loc.code})`, value: loc.id })) || []),
-            ]}
-          />
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        <Table columns={columns} data={tags} isLoading={tagsLoading} />
-      </div>
+    <>
+      <StandardPageLayout
+        title="Physical Stock & Item Tags"
+        description="Individual piece tracking with BIS Hallmark HUID and multi-location balances"
+        badge="Vault & HUID Registry"
+        stats={statWidgets}
+        searchPlaceholder="Search by HUID, barcode tag, or product name..."
+        searchValue={search}
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPage(1);
+        }}
+        filterSlot={filterSlot}
+        primaryAction={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsLocationModalOpen(true)}>
+              <Building2 className="w-4 h-4 mr-1.5" /> + Location
+            </Button>
+            <Button size="sm" onClick={() => setIsStockInOpen(true)}>
+              <Plus className="w-4 h-4 mr-1.5" /> Stock In Physical Piece
+            </Button>
+          </div>
+        }
+        isLoading={tagsLoading}
+        totalCount={total}
+        tableContent={<Table columns={columns} data={tags} />}
+        pagination={{
+          currentPage: page,
+          totalPages,
+          totalItems: total,
+          itemsPerPage: limit,
+          onPageChange: setPage,
+        }}
+      />
 
       {/* Stock In Modal */}
       <Modal
@@ -599,6 +651,6 @@ export function InventoryPage() {
           />
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

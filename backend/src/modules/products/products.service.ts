@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull, In } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { ProductStone } from './entities/product-stone.entity';
 import { ProductMedia } from './entities/product-media.entity';
@@ -189,6 +189,50 @@ export class ProductsService {
     };
   }
 
+  // ─── GET CATALOG KPI STATS & WIDGET COUNTS ──────────────────────────────
+  async getStats() {
+    const total = await this.productRepo.count({
+      where: { deletedAt: IsNull() },
+    });
+    const published = await this.productRepo.count({
+      where: { status: ProductStatus.PUBLISHED, deletedAt: IsNull() },
+    });
+    const drafts = await this.productRepo.count({
+      where: {
+        status: In([ProductStatus.DRAFT, ProductStatus.PENDING_APPROVAL]),
+        deletedAt: IsNull(),
+      },
+    });
+    const gold = await this.productRepo.count({
+      where: { metalType: MetalType.GOLD, deletedAt: IsNull() },
+    });
+    const silver = await this.productRepo.count({
+      where: { metalType: MetalType.SILVER, deletedAt: IsNull() },
+    });
+    const platinum = await this.productRepo.count({
+      where: { metalType: MetalType.PLATINUM, deletedAt: IsNull() },
+    });
+
+    const rawWeight = await this.productRepo
+      .createQueryBuilder('p')
+      .select('SUM(p.grossWeight)', 'totalWeight')
+      .where('p.deletedAt IS NULL')
+      .getRawOne();
+
+    return {
+      success: true,
+      data: {
+        total,
+        published,
+        drafts,
+        gold,
+        silver,
+        platinum,
+        totalWeight: Number(rawWeight?.totalWeight || 0),
+      },
+    };
+  }
+
   // ─── GET ONE WITH CURRENT DYNAMIC PRICE ────────────────────────────────────
   async findOne(id: string) {
     const product = await this.productRepo.findOne({
@@ -308,6 +352,11 @@ export class ProductsService {
       await this._saveStones(product.id, dto.stones);
     }
 
+    // Save media if provided
+    if (dto.media?.length > 0) {
+      await this._saveMedia(product.id, dto.media);
+    }
+
     await this.auditService.log({
       userId,
       action: 'CREATE',
@@ -355,6 +404,14 @@ export class ProductsService {
       await this.stoneRepo.delete({ productId: product.id });
       if (product.hasStones && dto.stones?.length > 0) {
         await this._saveStones(product.id, dto.stones);
+      }
+    }
+
+    // Update media if provided
+    if (dto.media !== undefined) {
+      await this.mediaRepo.delete({ productId: product.id });
+      if (dto.media?.length > 0) {
+        await this._saveMedia(product.id, dto.media);
       }
     }
 
@@ -559,5 +616,24 @@ export class ProductsService {
     });
 
     await this.stoneRepo.save(stoneEntities);
+  }
+
+  private async _saveMedia(productId: string, mediaList: any[]) {
+    const mediaEntities = mediaList.map((m: any, index: number) => {
+      const originalUrl = typeof m === 'string' ? m : m.originalUrl || m.url;
+      return this.mediaRepo.create({
+        productId,
+        originalUrl,
+        thumbnailUrl: typeof m === 'object' && m.thumbnailUrl ? m.thumbnailUrl : originalUrl,
+        standardUrl: typeof m === 'object' && m.standardUrl ? m.standardUrl : originalUrl,
+        hiResUrl: typeof m === 'object' && m.hiResUrl ? m.hiResUrl : originalUrl,
+        isPrimary: typeof m === 'object' && m.isPrimary !== undefined ? Boolean(m.isPrimary) : index === 0,
+        sortOrder: typeof m === 'object' && m.sortOrder !== undefined ? Number(m.sortOrder) : index,
+        mediaType: typeof m === 'object' && m.mediaType ? m.mediaType : 'image',
+        altText: typeof m === 'object' && m.altText ? m.altText : null,
+      });
+    });
+
+    await this.mediaRepo.save(mediaEntities);
   }
 }

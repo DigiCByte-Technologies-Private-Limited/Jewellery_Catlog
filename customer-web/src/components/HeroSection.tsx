@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { ArrowRight, Sparkles, Check, ShoppingBag } from 'lucide-react';
+import { Play } from 'lucide-react';
 import type {
   MetalType,
   GemType,
@@ -30,151 +30,114 @@ interface HeroSectionProps {
   onAddToCart?: () => void;
 }
 
+const HeroVisual = () => (
+  <div className="relative w-full max-w-md mx-auto lg:max-w-lg lg:ml-auto">
+    {/* Top Center Star */}
+    <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[#1C1A17] z-20">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"/>
+      </svg>
+    </div>
+
+    {/* The Outer Frame with thin line */}
+    <div className="relative border border-[#D1C6B4] rounded-t-full pt-6 px-6 pb-0" style={{ paddingBottom: '0' }}>
+      {/* The Inner Arched Mask */}
+      <div className="relative w-full aspect-[4/5] rounded-t-full overflow-hidden bg-stone-200 z-10">
+        <img 
+          src="/hero-arch-new.jpg" 
+          alt="Exquisite Jewelry Model" 
+          className="absolute inset-0 w-full h-full object-cover object-center" 
+        />
+      </div>
+    </div>
+
+    {/* Floating Play Button overlapping the arch (Static Visual Element) */}
+    <div className="absolute top-24 -left-4 sm:-left-6 z-30 w-16 h-16 rounded-full bg-white shadow-xl flex items-center justify-center text-[#1C1A17]">
+      <Play className="w-5 h-5 ml-1 fill-[#1C1A17]" />
+      
+      {/* Connecting visual line simulating the design */}
+      <div className="absolute top-1/2 right-full w-12 h-[1px] bg-[#1C1A17] -z-10 hidden sm:block"></div>
+      <div className="absolute top-1/2 right-full w-[1px] h-24 bg-[#1C1A17] -translate-y-24 -translate-x-12 hidden sm:block"></div>
+      <div className="absolute top-1/2 right-full -translate-y-24 -translate-x-12 -mt-3 ml-1 text-xs font-sans font-medium whitespace-nowrap hidden sm:block">
+        Play Video
+      </div>
+    </div>
+  </div>
+);
+
 export const HeroSection = ({
   onOpenConsultation,
   onAddToCart,
 }: HeroSectionProps) => {
   const sectionRef = useRef<HTMLElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Pause video when scrolled out of view to preserve 100% GPU/CPU for buttery smooth scrolling
-  useEffect(() => {
-    const video = videoRef.current;
-    const section = sectionRef.current;
-    if (!video || !section) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          video.play().catch(() => {});
-        } else {
-          video.pause();
-        }
-      },
-      { threshold: 0.05 }
-    );
-
-    observer.observe(section);
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <section
       ref={sectionRef}
       id="home"
-      className="relative w-full overflow-hidden gpu-layer"
-      style={{ height: '100dvh' }}
+      className="relative w-full bg-[#F9F5EC] pt-28 pb-10 lg:pt-36 lg:pb-12 overflow-hidden"
     >
-      {/* ── Web-optimized 60fps lag-free video — full width, full height, edge to edge ── */}
-      <video
-        ref={videoRef}
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        className="absolute inset-0 w-full h-full object-cover gpu-layer pointer-events-none"
-        style={{
-          objectPosition: 'center center',
-          transform: 'translate3d(0, 0, 0)',
-          willChange: 'transform',
-        }}
-      >
-        <source src="/hero-video-optimized.mp4" type="video/mp4" />
-        <source src="/hero-video.mp4" type="video/mp4" />
-      </video>
+      {/* Decorative Star (Top Left) */}
+      <div className="absolute top-32 left-[10%] text-[#D1C6B4]">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"/>
+        </svg>
+      </div>
 
-      {/* ── Top vignette for navbar readability ── */}
-      <div
-        className="absolute inset-x-0 top-0 h-28 pointer-events-none z-10"
-        style={{
-          background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%)',
-        }}
-      />
-
-      {/* ── Left-side gradient for text readability, right stays clear for product ── */}
-      <div
-        className="absolute inset-y-0 left-0 pointer-events-none z-10"
-        style={{
-          width: '60%',
-          background: 'linear-gradient(to right, rgba(6,4,2,0.80) 0%, rgba(6,4,2,0.50) 55%, transparent 100%)',
-        }}
-      />
-      {/* ── Bottom gradient ── */}
-      <div
-        className="absolute inset-x-0 bottom-0 pointer-events-none z-10"
-        style={{
-          height: '35%',
-          background: 'linear-gradient(to top, rgba(6,4,2,0.70) 0%, transparent 100%)',
-        }}
-      />
-
-      {/* ── Text content pinned to left-bottom ── */}
-      <div className="absolute inset-y-0 left-0 z-20 flex items-end pb-10 sm:pb-14 px-6 sm:px-10 lg:px-16">
-        <div className="flex flex-col items-start space-y-5 max-w-xl">
-
-          {/* Eyebrow badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-amber-300/50 text-amber-200 text-xs font-semibold tracking-[0.25em] uppercase backdrop-blur-sm">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>HAUTE JOAILLERIE · BESPOKE FINE ATELIER</span>
-          </div>
-
-          {/* Headline */}
-          <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[1.15] text-white drop-shadow-lg text-left">
-            <span className="block">Where Pure Light</span>
-            <span className="block gold-gradient-text font-bold">Meets Rare Craft.</span>
+      <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-8 items-center">
+        
+        {/* ── Left Column: Typography & Content ── */}
+        <div className="flex flex-col items-start pt-8">
+          <h1 className="font-serif text-5xl sm:text-6xl lg:text-[5.5rem] font-semibold text-[#1C1A17] leading-[1.1] tracking-tight mb-8">
+            Find <span className="inline-block align-middle mx-3 w-[1.2em] h-[1.2em] rounded-full overflow-hidden bg-stone-300 shadow-sm border border-stone-200">
+              <img src="/demi-fine-jewelry.jpg" alt="Jewelry Detail" className="w-full h-full object-cover object-center" />
+            </span> Your <br className="hidden sm:block" />
+            Perfect Piece
           </h1>
 
-          {/* Subtitle */}
-          <p className="text-white/75 text-sm sm:text-base font-light leading-relaxed drop-shadow text-left">
-            Discover curated fine jewelry collections handcrafted in pure 18K gold, 22K gold, and platinum 950. From bespoke bridal commissions to everyday modern heirlooms, each piece is brought to life by master goldsmiths.
+          <div className="block lg:hidden w-full max-w-[90%] sm:max-w-md mx-auto mb-10 mt-2">
+            <HeroVisual />
+          </div>
+
+          <p className="text-stone-600 text-base sm:text-lg max-w-md mb-10 leading-relaxed font-sans">
+            Discover Timeless Elegance Elevate Your Style with Our Exquisite Jewelry Collection.
           </p>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-start gap-4 pt-1 w-full">
-            <button
-              onClick={() => {
-                const el = document.getElementById('collections');
-                if (el) {
-                  const lenis = (window as any).__lenis;
-                  if (lenis) lenis.scrollTo(el, { offset: -80, duration: 1.2 });
-                  else el.scrollIntoView({ behavior: 'smooth' });
-                } else if (onAddToCart) {
-                  onAddToCart();
-                }
-              }}
-              className="w-full sm:w-auto px-8 py-4 rounded-full bg-[#d4af37] hover:bg-[#c9a227] text-[#1C1917] font-semibold text-xs tracking-[0.2em] uppercase shadow-lg shadow-black/40 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>EXPLORE THE COLLECTION</span>
-            </button>
-
-            <button
-              onClick={onOpenConsultation}
-              className="w-full sm:w-auto px-7 py-4 rounded-full border border-white/40 hover:border-amber-300 text-white hover:text-amber-200 text-xs font-semibold tracking-[0.18em] uppercase transition-all backdrop-blur-md bg-white/10 hover:bg-white/15 cursor-pointer flex items-center justify-center gap-2"
-            >
-              <span>PRIVATE SHOWROOM CONSULTATION</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Quick Guarantees */}
-          <div className="flex flex-wrap items-center gap-6 text-xs text-white/60 font-normal pt-1">
-            <div className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-amber-300" />
-              <span>100% GIA Certified Solitaires</span>
+          {/* Overlapping Circles */}
+          <div className="flex items-center mb-10">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-[#F9F5EC] bg-stone-200 z-30">
+              <img src="/images-1.jpg" alt="Jewelry Detail" className="w-full h-full object-cover" />
             </div>
-            <div className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-amber-300" />
-              <span>BIS Hallmarked 18K &amp; 22K Gold</span>
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-[#F9F5EC] bg-stone-200 -ml-4 z-20">
+              <img src="/images-2.jpg" alt="Jewelry Detail" className="w-full h-full object-cover" />
             </div>
-            <div className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-amber-300" />
-              <span>Complimentary Insured Courier</span>
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-[#F9F5EC] bg-stone-200 -ml-4 z-10">
+              <img src="/images-3.jpg" alt="Jewelry Detail" className="w-full h-full object-cover" />
             </div>
           </div>
 
+          <button
+            onClick={() => {
+              const el = document.getElementById('collections');
+              if (el) {
+                const lenis = (window as any).__lenis;
+                if (lenis) lenis.scrollTo(el, { offset: -80, duration: 1.2 });
+                else el.scrollIntoView({ behavior: 'smooth' });
+              } else if (onAddToCart) {
+                onAddToCart();
+              }
+            }}
+            className="group font-sans font-bold text-[#1C1A17] text-sm tracking-widest uppercase flex items-center gap-2 hover:opacity-70 transition-opacity"
+          >
+            SHOP NOW <span className="text-xl leading-none group-hover:translate-x-1 transition-transform">›</span>
+          </button>
         </div>
+
+        {/* ── Right Column: Arched Visual (Visible only on desktop) ── */}
+        <div className="hidden lg:block w-full">
+          <HeroVisual />
+        </div>
+
       </div>
     </section>
   );

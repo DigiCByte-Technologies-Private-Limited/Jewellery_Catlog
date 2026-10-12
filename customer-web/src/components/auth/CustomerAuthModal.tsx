@@ -19,6 +19,14 @@ import {
 import { useCustomerAuthStore } from '../../store/authStore';
 import { customerAuthApi } from '../../api/customer-auth.api';
 
+import {
+  isValidEmail,
+  isValidPhone,
+  isValidPincode,
+  isValidName,
+  sanitizePhoneNumber,
+} from '../../utils/validation';
+
 interface CustomerAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -56,6 +64,7 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
 
   // UI state
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -65,8 +74,19 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
 
   const resetMessages = () => {
     setErrorMsg(null);
+    setFieldErrors({});
     setSuccessMsg(null);
     setForgotSuccess(false);
+  };
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   };
 
   const handleTabChange = (newTab: 'login' | 'register' | 'forgot') => {
@@ -78,8 +98,20 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
     e.preventDefault();
     resetMessages();
 
-    if (!loginEmail.trim() || !loginPassword) {
-      setErrorMsg('Please enter both email and password.');
+    const errors: Record<string, string> = {};
+    if (!loginEmail.trim()) {
+      errors.loginEmail = 'Email address is required.';
+    } else if (!isValidEmail(loginEmail)) {
+      errors.loginEmail = 'Please enter a valid email address.';
+    }
+
+    if (!loginPassword) {
+      errors.loginPassword = 'Password is required.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMsg('Please correct the highlighted errors.');
       return;
     }
 
@@ -109,56 +141,81 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
     e.preventDefault();
     resetMessages();
 
-    // Validations
-    if (!regFullName.trim() || regFullName.trim().length < 2) {
-      setErrorMsg('Full name must be at least 2 characters.');
-      return;
+    const errors: Record<string, string> = {};
+
+    // 1. Full name validation
+    if (!isValidName(regFullName)) {
+      errors.regFullName = 'Full name must be at least 2 characters.';
     }
 
-    if (!/^\S+@\S+\.\S+$/.test(regEmail.trim())) {
-      setErrorMsg('Please enter a valid email address.');
-      return;
+    // 2. Email validation
+    if (!isValidEmail(regEmail)) {
+      errors.regEmail = 'Please provide a valid email address.';
     }
 
-    const cleanPhone = regPhone.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
-      setErrorMsg('Please provide a valid 10-digit mobile number.');
-      return;
+    // 3. Primary phone validation
+    const cleanPhone = sanitizePhoneNumber(regPhone);
+    if (!cleanPhone || !isValidPhone(cleanPhone)) {
+      errors.regPhone = 'Please provide a valid 10-digit mobile number.';
     }
 
+    // 4. Delivery address validation
     if (!regAddress.trim() || regAddress.trim().length < 5) {
-      setErrorMsg('Please provide a complete delivery address.');
-      return;
+      errors.regAddress = 'Please provide a complete street address (minimum 5 characters).';
     }
 
+    // 5. PIN code validation
     const cleanPincode = regPincode.replace(/\D/g, '');
-    if (cleanPincode.length !== 6) {
-      setErrorMsg('Please enter a valid 6-digit PIN code.');
-      return;
+    if (!isValidPincode(cleanPincode)) {
+      errors.regPincode = 'Please enter a valid 6-digit postal PIN code.';
     }
 
-    if (regPassword.length < 6) {
-      setErrorMsg('Password must be at least 6 characters.');
-      return;
+    // 6. Optional Alt phone validation
+    let cleanAltPhone: string | undefined = undefined;
+    if (regAltPhone.trim()) {
+      cleanAltPhone = sanitizePhoneNumber(regAltPhone);
+      if (!isValidPhone(cleanAltPhone)) {
+        errors.regAltPhone = 'Alternative phone must be a valid 10-digit number.';
+      }
     }
 
+    // 7. Optional WhatsApp number validation
+    let cleanWhatsapp: string | undefined = undefined;
+    if (sameAsPhone) {
+      cleanWhatsapp = cleanPhone;
+    } else if (regWhatsapp.trim()) {
+      cleanWhatsapp = sanitizePhoneNumber(regWhatsapp);
+      if (!isValidPhone(cleanWhatsapp)) {
+        errors.regWhatsapp = 'WhatsApp number must be a valid 10-digit number.';
+      }
+    }
+
+    // 8. Password validation
+    if (!regPassword || regPassword.length < 6) {
+      errors.regPassword = 'Password must be at least 6 characters.';
+    }
+
+    // 9. Confirm password matching
     if (regPassword !== regConfirmPassword) {
-      setErrorMsg('Password and Confirm Password do not match.');
+      errors.regConfirmPassword = 'Passwords do not match.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMsg('Please review the form and correct the highlighted fields.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const whatsappVal = sameAsPhone ? regPhone.trim() : regWhatsapp.trim() || undefined;
-
       await register({
         fullName: regFullName.trim(),
         email: regEmail.trim().toLowerCase(),
-        phone: regPhone.trim(),
+        phone: cleanPhone,
         address: regAddress.trim(),
-        pincode: regPincode.trim(),
-        altPhone: regAltPhone.trim() || undefined,
-        whatsappNumber: whatsappVal,
+        pincode: cleanPincode,
+        altPhone: cleanAltPhone,
+        whatsappNumber: cleanWhatsapp,
         password: regPassword,
         confirmPassword: regConfirmPassword,
       });
@@ -183,8 +240,9 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
     e.preventDefault();
     resetMessages();
 
-    if (!forgotEmail.trim() || !/^\S+@\S+\.\S+$/.test(forgotEmail.trim())) {
-      setErrorMsg('Please provide a valid email address.');
+    if (!forgotEmail.trim() || !isValidEmail(forgotEmail)) {
+      setFieldErrors({ forgotEmail: 'Please enter a valid email address.' });
+      setErrorMsg('Please provide a valid registered email address.');
       return;
     }
 
@@ -309,9 +367,19 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                   required
                   placeholder="patron@aurumjewels.com"
                   value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                  onChange={(e) => {
+                    setLoginEmail(e.target.value);
+                    clearFieldError('loginEmail');
+                  }}
+                  className={`w-full px-4 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                    fieldErrors.loginEmail
+                      ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                      : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                  }`}
                 />
+                {fieldErrors.loginEmail && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.loginEmail}</p>
+                )}
               </div>
 
               <div>
@@ -334,8 +402,15 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                     required
                     placeholder="Enter your password"
                     value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 pr-10 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                    onChange={(e) => {
+                      setLoginPassword(e.target.value);
+                      clearFieldError('loginPassword');
+                    }}
+                    className={`w-full px-4 py-2.5 pr-10 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                      fieldErrors.loginPassword
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                    }`}
                   />
                   <button
                     type="button"
@@ -345,6 +420,9 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {fieldErrors.loginPassword && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.loginPassword}</p>
+                )}
               </div>
 
               <button
@@ -392,9 +470,19 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                   required
                   placeholder="e.g. Priya Sharma"
                   value={regFullName}
-                  onChange={(e) => setRegFullName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                  onChange={(e) => {
+                    setRegFullName(e.target.value);
+                    clearFieldError('regFullName');
+                  }}
+                  className={`w-full px-4 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                    fieldErrors.regFullName
+                      ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                      : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                  }`}
                 />
+                {fieldErrors.regFullName && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regFullName}</p>
+                )}
               </div>
 
               {/* Email & Phone */}
@@ -409,9 +497,19 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                     required
                     placeholder="priya@example.com"
                     value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                    onChange={(e) => {
+                      setRegEmail(e.target.value);
+                      clearFieldError('regEmail');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                      fieldErrors.regEmail
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                    }`}
                   />
+                  {fieldErrors.regEmail && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regEmail}</p>
+                  )}
                 </div>
 
                 <div>
@@ -425,9 +523,19 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                     placeholder="10-digit mobile"
                     maxLength={14}
                     value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                    onChange={(e) => {
+                      setRegPhone(e.target.value);
+                      clearFieldError('regPhone');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                      fieldErrors.regPhone
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                    }`}
                   />
+                  {fieldErrors.regPhone && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regPhone}</p>
+                  )}
                 </div>
               </div>
 
@@ -442,9 +550,19 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                   required
                   placeholder="Flat/House No., Building, Street / Area"
                   value={regAddress}
-                  onChange={(e) => setRegAddress(e.target.value)}
-                  className="w-full px-4 py-2 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition resize-none shadow-xs"
+                  onChange={(e) => {
+                    setRegAddress(e.target.value);
+                    clearFieldError('regAddress');
+                  }}
+                  className={`w-full px-4 py-2 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition resize-none shadow-xs ${
+                    fieldErrors.regAddress
+                      ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                      : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                  }`}
                 />
+                {fieldErrors.regAddress && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regAddress}</p>
+                )}
               </div>
 
               {/* PIN Code & Alt Phone */}
@@ -459,9 +577,19 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                     maxLength={6}
                     placeholder="e.g. 400001"
                     value={regPincode}
-                    onChange={(e) => setRegPincode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                    onChange={(e) => {
+                      setRegPincode(e.target.value.replace(/\D/g, ''));
+                      clearFieldError('regPincode');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                      fieldErrors.regPincode
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                    }`}
                   />
+                  {fieldErrors.regPincode && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regPincode}</p>
+                  )}
                 </div>
 
                 <div>
@@ -471,10 +599,21 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                   <input
                     type="tel"
                     placeholder="Optional alternate"
+                    maxLength={14}
                     value={regAltPhone}
-                    onChange={(e) => setRegAltPhone(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                    onChange={(e) => {
+                      setRegAltPhone(e.target.value);
+                      clearFieldError('regAltPhone');
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                      fieldErrors.regAltPhone
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                    }`}
                   />
+                  {fieldErrors.regAltPhone && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regAltPhone}</p>
+                  )}
                 </div>
               </div>
 
@@ -492,6 +631,7 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                         setSameAsPhone(e.target.checked);
                         if (e.target.checked) {
                           setRegWhatsapp(regPhone);
+                          clearFieldError('regWhatsapp');
                         }
                       }}
                       className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
@@ -500,13 +640,26 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                   </label>
                 </div>
                 {!sameAsPhone && (
-                  <input
-                    type="tel"
-                    placeholder="WhatsApp number for updates"
-                    value={regWhatsapp}
-                    onChange={(e) => setRegWhatsapp(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
-                  />
+                  <>
+                    <input
+                      type="tel"
+                      placeholder="WhatsApp number for updates"
+                      maxLength={14}
+                      value={regWhatsapp}
+                      onChange={(e) => {
+                        setRegWhatsapp(e.target.value);
+                        clearFieldError('regWhatsapp');
+                      }}
+                      className={`w-full px-4 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                        fieldErrors.regWhatsapp
+                          ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                          : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                      }`}
+                    />
+                    {fieldErrors.regWhatsapp && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regWhatsapp}</p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -523,8 +676,15 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                       required
                       placeholder="Min 6 characters"
                       value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      className="w-full px-4 py-2.5 pr-9 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                      onChange={(e) => {
+                        setRegPassword(e.target.value);
+                        clearFieldError('regPassword');
+                      }}
+                      className={`w-full px-4 py-2.5 pr-9 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                        fieldErrors.regPassword
+                          ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                          : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                      }`}
                     />
                     <button
                       type="button"
@@ -534,6 +694,9 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                       {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
+                  {fieldErrors.regPassword && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regPassword}</p>
+                  )}
                 </div>
 
                 <div>
@@ -547,8 +710,15 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                       required
                       placeholder="Re-enter password"
                       value={regConfirmPassword}
-                      onChange={(e) => setRegConfirmPassword(e.target.value)}
-                      className="w-full px-4 py-2.5 pr-9 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                      onChange={(e) => {
+                        setRegConfirmPassword(e.target.value);
+                        clearFieldError('regConfirmPassword');
+                      }}
+                      className={`w-full px-4 py-2.5 pr-9 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                        fieldErrors.regConfirmPassword
+                          ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                          : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                      }`}
                     />
                     <button
                       type="button"
@@ -558,6 +728,9 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                       {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
+                  {fieldErrors.regConfirmPassword && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.regConfirmPassword}</p>
+                  )}
                 </div>
               </div>
 
@@ -608,9 +781,19 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                       required
                       placeholder="patron@aurumjewels.com"
                       value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28] text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs"
+                      onChange={(e) => {
+                        setForgotEmail(e.target.value);
+                        clearFieldError('forgotEmail');
+                      }}
+                      className={`w-full px-4 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 outline-none transition shadow-xs ${
+                        fieldErrors.forgotEmail
+                          ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                          : 'border-stone-200 focus:border-[#8C6A28] focus:ring-1 focus:ring-[#8C6A28]'
+                      }`}
                     />
+                    {fieldErrors.forgotEmail && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.forgotEmail}</p>
+                    )}
                   </div>
 
                   <button

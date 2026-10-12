@@ -1,55 +1,110 @@
-import { Gem, ShieldCheck, Award, CreditCard } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 
 export const FeatureHighlights = () => {
-  const features = [
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const categories = [
     {
-      icon: Gem,
-      title: 'THE PERMANENT VAULT',
-      description: 'Rare solitaires & hallmarked gold suites',
+      title: 'EARRINGS',
+      count: '45 Products',
+      image: '/images-1.jpg',
+      filterId: 'earring',
     },
     {
-      icon: Award,
-      title: 'SHOWROOM VIP CONCIERGE',
-      description: '1-on-1 certified gemologist guidance',
+      title: 'BRACELET',
+      count: '30 Products',
+      image: '/images-4.jpg',
+      filterId: 'bangle',
     },
     {
-      icon: ShieldCheck,
-      title: 'HEIRLOOM PROVENANCE',
-      description: 'Individual GIA dossier & BIS hallmarks',
+      title: 'NECKLACE',
+      count: '56 Products',
+      image: '/images-3.jpg',
+      filterId: 'necklace',
     },
     {
-      icon: CreditCard,
-      title: 'TAILORED ACQUISITIONS',
-      description: 'Structured commission & milestone terms',
+      title: 'RINGS',
+      count: '50 Products',
+      image: '/images-2.jpg',
+      filterId: 'ring',
+    },
+    {
+      title: 'BANGLES',
+      count: '24 Products',
+      image: '/images-5.jpg',
+      filterId: 'bangle',
     },
   ];
 
+  const handleCategoryClick = (filterId: string) => {
+    // Update URL search params
+    const params = new URLSearchParams(searchParams);
+    if (filterId) {
+      params.set('category', filterId);
+    } else {
+      params.delete('category');
+    }
+    setSearchParams(params);
+
+    // Smooth scroll to the collections section
+    const el = document.getElementById('collections');
+    if (el) {
+      const lenis = (window as any).__lenis;
+      if (lenis) {
+        lenis.scrollTo(el, { offset: -80, duration: 1.2 });
+      } else {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
   return (
-    <section className="border-y border-stone-200/80 bg-gradient-to-r from-[#F7F4EE] via-[#FAF8F5] to-[#F7F4EE] py-8 sm:py-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-          {features.map((feature, idx) => {
-            const Icon = feature.icon;
-            return (
-              <div
-                key={idx}
-                className="flex items-center space-x-4 p-4 rounded-2xl bg-white border border-stone-200/80 hover:border-amber-400/60 transition-all duration-300 group shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-md"
-              >
-                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-amber-100/80 via-amber-50 to-transparent border border-amber-300/60 flex items-center justify-center text-[#8C6A28] group-hover:scale-110 group-hover:text-[#B89047] transition-all">
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="flex flex-col">
-                  <h4 className="font-serif text-xs font-semibold tracking-[0.18em] uppercase text-[#1C1917] group-hover:text-[#8C6A28] transition-colors">
-                    {feature.title}
-                  </h4>
-                  <p className="text-xs text-stone-500 font-normal mt-0.5">
-                    {feature.description}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
+    <section className="bg-[#F9F5EC] pt-4 pb-20 lg:pt-6 lg:pb-28">
+      <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
+        
+        {/* Header */}
+        <div className="flex items-center justify-center mb-12">
+          <h2 className="font-serif text-4xl lg:text-5xl font-semibold text-[#1C1A17] tracking-tight">
+            Shop by Category
+          </h2>
         </div>
+
+        {/* Categories Marquee (Infinite Loop) */}
+        <div className="w-[100vw] relative left-1/2 -translate-x-1/2 overflow-hidden py-4">
+          <div className="animate-marquee flex gap-6 lg:gap-12 px-3 lg:px-6">
+            {[...categories, ...categories, ...categories, ...categories].map((cat, idx) => (
+              <div 
+                key={idx} 
+                onClick={() => handleCategoryClick(cat.filterId)}
+                className="flex-none w-[45vw] md:w-[22vw] lg:w-[16vw] flex flex-col items-center group cursor-pointer"
+              >
+                <div className="w-full aspect-square rounded-full overflow-hidden mb-6 bg-stone-200">
+                  <img 
+                    src={cat.image} 
+                    alt={cat.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  />
+                </div>
+                <h3 className="font-sans text-sm font-bold tracking-widest uppercase text-[#1C1A17] mb-2">
+                  {cat.title}
+                </h3>
+                <p className="font-sans text-xs text-stone-500">
+                  {cat.count}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-center mt-6">
+            <button 
+              onClick={() => handleCategoryClick('')}
+              className="px-6 py-2 border border-[#D1C6B4] text-[#1C1A17] text-xs font-semibold uppercase tracking-widest hover:bg-[#1C1A17] hover:text-white transition-all"
+            >
+              View All Categories
+            </button>
+        </div>
+
       </div>
     </section>
   );

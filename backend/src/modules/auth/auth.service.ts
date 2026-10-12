@@ -97,7 +97,7 @@ export class AuthService {
     if (!isMatch) throw new UnauthorizedException('Refresh token mismatch. Please log in again.');
 
     const newAccessToken = this._generateAccessToken(user);
-    return { accessToken: newAccessToken };
+    return { accessToken: newAccessToken, user: this._sanitizeUser(user) };
   }
 
   // ─── Logout ───────────────────────────────────────────────────────────────

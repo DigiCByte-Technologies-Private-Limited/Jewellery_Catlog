@@ -21,6 +21,7 @@ import type { MetalType, GemType, ProngStyle } from '../types/bespoke';
 import { productsApi } from '../api/products.api';
 import { requestsApi, type CreateInquiryPayload } from '../api/requests.api';
 import { useCustomerAuthStore } from '../store/authStore';
+import { isValidEmail, isValidPhone, isValidName, sanitizePhoneNumber } from '../utils/validation';
 
 export interface CartItem {
   modelType: 'solitaire-ring' | 'emerald-ring' | 'solitaire-bracelet';
@@ -80,6 +81,17 @@ export const LuxuryCartDrawer: React.FC<LuxuryCartDrawerProps> = ({
   const [selectedShowroomCity, setSelectedShowroomCity] = useState('Bangalore');
   const [customerNotes, setCustomerNotes] = useState('');
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   // Confirmed Evaluation State
   const [confirmedInquiry, setConfirmedInquiry] = useState<{
@@ -188,10 +200,6 @@ export const LuxuryCartDrawer: React.FC<LuxuryCartDrawerProps> = ({
   const selectedStore =
     SHOWROOM_OPTIONS.find((s) => s.city === selectedShowroomCity) || SHOWROOM_OPTIONS[0];
 
-  const getCleanWhatsAppNumber = (num: string) => {
-    return num.replace(/[^\d]/g, '');
-  };
-
   // Instant 1-Click WhatsApp Chat (Bypasses form for quick direct inquiry)
   const handleInstantWhatsApp = () => {
     const targetStore = selectedStore;
@@ -217,15 +225,30 @@ export const LuxuryCartDrawer: React.FC<LuxuryCartDrawerProps> = ({
   const handleTransmitWhatsAppEvaluation = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+    setFieldErrors({});
+
+    const errors: Record<string, string> = {};
 
     if (!customerName.trim()) {
-      setFormError('Please enter your full name.');
-      return;
+      errors.customerName = 'Please enter your full name.';
+    } else if (!isValidName(customerName)) {
+      errors.customerName = 'Name must be at least 2 characters long.';
     }
 
-    const cleanPhone = getCleanWhatsAppNumber(customerPhone);
-    if (!cleanPhone || cleanPhone.length < 10) {
-      setFormError('Please enter a valid 10-digit WhatsApp phone number.');
+    const cleanPhone = sanitizePhoneNumber(customerPhone);
+    if (!customerPhone.trim()) {
+      errors.customerPhone = 'Please enter your WhatsApp phone number.';
+    } else if (!isValidPhone(cleanPhone)) {
+      errors.customerPhone = 'Please enter a valid 10-digit mobile number.';
+    }
+
+    if (customerEmail.trim() && !isValidEmail(customerEmail)) {
+      errors.customerEmail = 'Please provide a valid email address.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please correct the highlighted fields before transmitting.');
       return;
     }
 
@@ -238,8 +261,8 @@ export const LuxuryCartDrawer: React.FC<LuxuryCartDrawerProps> = ({
       // 1. Register official inquiry in PostgreSQL database
       const inquiryPayload: CreateInquiryPayload = {
         customerName: customerName.trim(),
-        email: customerEmail.trim() || 'concierge-lead@aurumjewels.com',
-        phone: customerPhone.trim(),
+        email: customerEmail.trim() ? customerEmail.trim().toLowerCase() : 'concierge-lead@aurumjewels.com',
+        phone: cleanPhone,
         city: targetStore.city,
         state: 'India',
         productId: cartItem.productId,
@@ -526,11 +549,21 @@ export const LuxuryCartDrawer: React.FC<LuxuryCartDrawerProps> = ({
                     required
                     placeholder="e.g. Radhika Sharma"
                     value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#B89047] text-xs text-stone-900 placeholder-stone-400 focus:outline-none shadow-2xs transition-colors"
+                    onChange={(e) => {
+                      setCustomerName(e.target.value);
+                      clearFieldError('customerName');
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none shadow-2xs transition-colors ${
+                      fieldErrors.customerName
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#B89047]'
+                    }`}
                   />
                   <User className="w-4 h-4 text-stone-400 absolute right-3 top-3 pointer-events-none" />
                 </div>
+                {fieldErrors.customerName && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.customerName}</p>
+                )}
               </div>
 
               {/* Form Input: WhatsApp Phone */}
@@ -542,16 +575,28 @@ export const LuxuryCartDrawer: React.FC<LuxuryCartDrawerProps> = ({
                   <input
                     type="tel"
                     required
+                    maxLength={14}
                     placeholder="e.g. +91 98765 43210"
                     value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#B89047] text-xs text-stone-900 placeholder-stone-400 focus:outline-none shadow-2xs transition-colors font-mono"
+                    onChange={(e) => {
+                      setCustomerPhone(e.target.value);
+                      clearFieldError('customerPhone');
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none shadow-2xs transition-colors font-mono ${
+                      fieldErrors.customerPhone
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#B89047]'
+                    }`}
                   />
                   <Phone className="w-4 h-4 text-stone-400 absolute right-3 top-3 pointer-events-none" />
                 </div>
-                <span className="text-[10px] text-stone-400 block mt-1">
-                  Our resident gemologist will reach out with the live quotation.
-                </span>
+                {fieldErrors.customerPhone ? (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.customerPhone}</p>
+                ) : (
+                  <span className="text-[10px] text-stone-400 block mt-1">
+                    Our resident gemologist will reach out with the live quotation.
+                  </span>
+                )}
               </div>
 
               {/* Form Input: Email */}
@@ -564,11 +609,21 @@ export const LuxuryCartDrawer: React.FC<LuxuryCartDrawerProps> = ({
                     type="email"
                     placeholder="patron@aurumjewels.com"
                     value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#B89047] text-xs text-stone-900 placeholder-stone-400 focus:outline-none shadow-2xs transition-colors"
+                    onChange={(e) => {
+                      setCustomerEmail(e.target.value);
+                      clearFieldError('customerEmail');
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs text-stone-900 placeholder-stone-400 focus:outline-none shadow-2xs transition-colors ${
+                      fieldErrors.customerEmail
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#B89047]'
+                    }`}
                   />
                   <Mail className="w-4 h-4 text-stone-400 absolute right-3 top-3 pointer-events-none" />
                 </div>
+                {fieldErrors.customerEmail && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.customerEmail}</p>
+                )}
               </div>
 
               {/* Form Input: Preferred Showroom */}

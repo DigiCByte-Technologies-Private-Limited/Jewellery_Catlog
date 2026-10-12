@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import {
   FileText, Clock, CheckCircle2, Package, Plus, ArrowRight,
   TrendingUp, Building2, Loader2, RefreshCw, Users
 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, wholesaleAuthApi } from '../store/authStore';
+import { getMySubmissions } from '../api/wholesale.api';
 
 interface DashboardStats {
   totalSubmissions: number;
@@ -43,7 +43,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export const DashboardPage = () => {
-  const { user, accessToken, fetchProfile } = useAuthStore();
+  const { user, fetchProfile } = useAuthStore();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<RecentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,19 +52,14 @@ export const DashboardPage = () => {
     setLoading(true);
     try {
       await fetchProfile();
-      // Fetch dashboard stats
-      const statsRes = await axios.get('http://localhost:3001/api/v1/wholesale/auth/dashboard', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      setStats(statsRes.data.data);
+      // Fetch dashboard stats via authenticated client with auto-refresh
+      const statsRes = await wholesaleAuthApi.get('/dashboard');
+      setStats(statsRes.data?.data || null);
 
       // Fetch recent submissions by email
       if (user?.email) {
-        const subRes = await axios.get(
-          `http://localhost:3001/api/v1/wholesale/submissions/my?email=${encodeURIComponent(user.email)}&page=1&limit=5`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        setRecent(subRes.data.data || []);
+        const subRes = await getMySubmissions(user.email, 1, 5);
+        setRecent((subRes.data as any) || []);
       }
     } catch { /* silently fail */ }
     finally { setLoading(false); }

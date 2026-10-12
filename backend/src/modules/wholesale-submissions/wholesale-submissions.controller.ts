@@ -157,6 +157,11 @@ export class WholesaleSubmissionsController {
   @ApiOperation({ summary: 'Submit a new wholesale product image proposal for Admin review' })
   async createSubmission(@Body() dto: CreateWholesaleSubmissionDto, @Req() req: Request) {
     const user = (req as any).user;
+    if (!dto.images || dto.images.length === 0) {
+      if (Array.isArray((req.body as any)?.images) && (req.body as any).images.length > 0) {
+        dto.images = (req.body as any).images;
+      }
+    }
     return this.wholesaleService.create(dto, user);
   }
 
@@ -196,6 +201,8 @@ export class WholesaleSubmissionsController {
     UserRole.STORE_MANAGER,
     UserRole.CATALOG_MANAGER,
     UserRole.INVENTORY_MANAGER,
+    UserRole.SALES_STAFF,
+    UserRole.AUDITOR,
   )
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get wholesale proposals pipeline stats for Admin' })
@@ -213,6 +220,8 @@ export class WholesaleSubmissionsController {
     UserRole.STORE_MANAGER,
     UserRole.CATALOG_MANAGER,
     UserRole.INVENTORY_MANAGER,
+    UserRole.SALES_STAFF,
+    UserRole.AUDITOR,
   )
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all wholesale product submissions for Admin review' })

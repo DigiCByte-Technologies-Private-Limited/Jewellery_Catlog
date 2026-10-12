@@ -20,6 +20,7 @@ import {
   UpdateProductRequestDto,
   QueryProductRequestsDto,
   AssignStoreDto,
+  AssignPartnerDto,
   StoreFollowUpDto,
   StorePurchaseOutcomeDto,
 } from './dto/product-request.dto';
@@ -131,7 +132,7 @@ export class RequestsController {
   @Get(':id/nearby-stores')
   @ApiBearerAuth('JWT')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.SALES_STAFF)
   @ApiOperation({ summary: 'Get stores ranked by proximity to this request customer' })
   async getNearbyStoresForRequest(@Param('id') id: string) {
     const res = await this.requestsService.findOne(id);
@@ -148,7 +149,7 @@ export class RequestsController {
   @Patch(':id/assign-store')
   @ApiBearerAuth('JWT')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.SALES_STAFF)
   @ApiOperation({ summary: 'Assign request to a nearby store (Admin)' })
   assignStore(
     @Param('id') id: string,
@@ -156,6 +157,22 @@ export class RequestsController {
     @Req() req?: any,
   ) {
     return this.requestsService.assignStore(id, dto, req?.user);
+  }
+
+  /**
+   * 8.1 Admin Endpoint: Assign or reassign request to a Wholesale Partner
+   */
+  @Patch(':id/assign-partner')
+  @ApiBearerAuth('JWT')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.STORE_MANAGER, UserRole.SALES_STAFF)
+  @ApiOperation({ summary: 'Assign request to a wholesale partner (Admin)' })
+  assignPartner(
+    @Param('id') id: string,
+    @Body() dto: AssignPartnerDto,
+    @Req() req?: any,
+  ) {
+    return this.requestsService.assignPartner(id, dto, req?.user);
   }
 
   /**

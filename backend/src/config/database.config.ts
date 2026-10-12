@@ -10,4 +10,9 @@ export default registerAs('database', () => ({
   autoLoadEntities: true,
   synchronize: process.env.NODE_ENV !== 'production', // auto-creates tables in dev
   logging: process.env.NODE_ENV === 'development',
+  extra: {
+    max: parseInt(process.env.DB_POOL_MAX || '25', 10),
+    idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
+    connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECT_TIMEOUT || '5000', 10),
+  },
 }));

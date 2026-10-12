@@ -80,9 +80,20 @@ export class WholesaleSubmissionsService {
 
   private sanitizeImages(images: any): SubmittedImageItem[] {
     if (!Array.isArray(images)) return [];
-    return images.filter(
-      (img: any) => img && typeof img === 'object' && !Array.isArray(img) && (img.url || img.filename),
-    );
+    return images
+      .filter((img: any) => img && typeof img === 'object' && !Array.isArray(img))
+      .map((img: any) => ({
+        id: String(img.id || img.fileId || `img-${Date.now()}`),
+        originalName: String(img.originalName || img.filename || 'uploaded-image'),
+        filename: String(img.filename || img.originalName || ''),
+        mimeType: String(img.mimeType || 'image/jpeg'),
+        sizeBytes: Number(img.sizeBytes || img.size || 0),
+        url: String(img.url || (img.filename ? `/api/v1/wholesale/attachments/${img.filename}` : '')),
+        imageTitle: img.imageTitle ? String(img.imageTitle) : undefined,
+        imageDescription: img.imageDescription ? String(img.imageDescription) : undefined,
+        sourceReference: img.sourceReference ? String(img.sourceReference) : undefined,
+      }))
+      .filter((img: SubmittedImageItem) => Boolean(img.url || img.filename));
   }
 
   /**

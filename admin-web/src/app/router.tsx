@@ -22,6 +22,8 @@ import { WholesalePartnersPage } from '../pages/wholesale-partners/WholesalePart
 import { CustomersPage } from '../pages/customers/CustomersPage';
 import { StoragePage } from '../pages/storage/StoragePage';
 import { SubscriptionsPage } from '../pages/subscriptions/SubscriptionsPage';
+import { RoleGuard } from './RoleGuard';
+import { NotFoundPage } from '../pages/error/NotFoundPage';
 
 export const router = createBrowserRouter([
   {
@@ -39,6 +41,7 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'products', element: <ProductsPage /> },
       { path: 'products/new', element: <ProductFormPage /> },
+      { path: 'products/:id/edit', element: <ProductFormPage /> },
       { path: 'products/:id', element: <ProductDetailPage /> },
       { path: 'inventory', element: <InventoryPage /> },
       { path: 'karigar', element: <KarigarPage /> },
@@ -50,17 +53,59 @@ export const router = createBrowserRouter([
       { path: 'wholesale-partners', element: <WholesalePartnersPage /> },
       { path: 'enquiries', element: <EnquiriesPage /> },
       { path: 'customers', element: <CustomersPage /> },
-      { path: 'storage', element: <StoragePage /> },
-      { path: 'subscriptions', element: <SubscriptionsPage /> },
-      { path: 'metal-rates', element: <MetalRatesPage /> },
+      {
+        path: 'storage',
+        element: (
+          <RoleGuard allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER', 'CATALOG_MANAGER', 'MARKETING']}>
+            <StoragePage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'subscriptions',
+        element: (
+          <RoleGuard allowedRoles={['SUPER_ADMIN']}>
+            <SubscriptionsPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'metal-rates',
+        element: (
+          <RoleGuard allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER', 'PRICING_MANAGER', 'ACCOUNTANT']}>
+            <MetalRatesPage />
+          </RoleGuard>
+        ),
+      },
       { path: 'categories', element: <CategoriesPage /> },
-      { path: 'users', element: <UsersPage /> },
-      { path: 'approvals', element: <ApprovalsPage /> },
-      { path: 'audit-logs', element: <AuditLogsPage /> },
+      {
+        path: 'users',
+        element: (
+          <RoleGuard allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER']}>
+            <UsersPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'approvals',
+        element: (
+          <RoleGuard allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER', 'AUDITOR']}>
+            <ApprovalsPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'audit-logs',
+        element: (
+          <RoleGuard allowedRoles={['SUPER_ADMIN', 'STORE_MANAGER', 'AUDITOR']}>
+            <AuditLogsPage />
+          </RoleGuard>
+        ),
+      },
     ]
   },
   {
     path: '*',
-    element: <div>404 Not Found</div>
+    element: <NotFoundPage />
   }
 ]);

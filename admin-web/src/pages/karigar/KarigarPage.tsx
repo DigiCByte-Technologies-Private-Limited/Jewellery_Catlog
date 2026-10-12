@@ -2,18 +2,23 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { karigarApi } from '../../api/karigar.api';
 import { productsApi } from '../../api/products.api';
+import {
+  StandardPageLayout,
+  type StatWidget,
+} from '../../components/layout/StandardPageLayout';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
-import { Card, CardContent } from '../../components/ui/Card';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { useToast } from '../../components/ui/Toast';
 import {
   Hammer,
   Plus,
   CheckCircle,
+  RotateCcw,
 } from 'lucide-react';
 
 export function KarigarPage() {
@@ -21,6 +26,11 @@ export function KarigarPage() {
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'artisans'>('orders');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [selectedArtisanId, setSelectedArtisanId] = useState('');
+  const [page, setPage] = useState(1);
+  const limit = 10;
 
   // Modals state
   const [isAddArtisanOpen, setIsAddArtisanOpen] = useState(false);
@@ -246,92 +256,210 @@ export function KarigarPage() {
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Karigar & Job-Work Ledger</h1>
-          <p className="text-slate-500 text-sm">Craftsman metal issuance, scrap returns, wastage reconciliation, and labor tracking</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsAddArtisanOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" /> Register Karigar
-          </Button>
-          <Button onClick={() => setIsIssueOrderOpen(true)}>
-            <Hammer className="w-4 h-4 mr-1.5" /> Issue Job-Work Order
-          </Button>
-        </div>
-      </div>
+  // Filtered datasets
+  const filteredOrders = orders.filter((o: any) => {
+    if (statusFilter && o.status !== statusFilter) return false;
+    if (selectedArtisanId && o.karigarId !== selectedArtisanId) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesOrder = o.orderNumber?.toLowerCase().includes(q);
+      const matchesArtisan = o.karigar?.name?.toLowerCase().includes(q) || o.karigar?.code?.toLowerCase().includes(q);
+      const matchesProduct = o.product?.name?.toLowerCase().includes(q) || o.product?.sku?.toLowerCase().includes(q);
+      if (!matchesOrder && !matchesArtisan && !matchesProduct) return false;
+    }
+    return true;
+  });
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-white border-amber-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Gold With Karigars</div>
-            <div className="text-2xl font-black text-amber-950 font-mono mt-1">
-              {totalGoldOutstanding.toFixed(3)} <span className="text-xs font-sans font-normal">grams</span>
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Raw gold issued in production pipeline</div>
-          </CardContent>
-        </Card>
+  const filteredArtisans = (artisans || []).filter((a: any) => {
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesName = a.name?.toLowerCase().includes(q);
+      const matchesCode = a.code?.toLowerCase().includes(q);
+      const matchesPhone = a.phone?.toLowerCase().includes(q);
+      const matchesSkills = a.skills?.toLowerCase().includes(q);
+      if (!matchesName && !matchesCode && !matchesPhone && !matchesSkills) return false;
+    }
+    return true;
+  });
 
-        <Card className="bg-white border-slate-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Artisans</div>
-            <div className="text-2xl font-black text-slate-800 font-mono mt-1">
-              {artisans?.length || 0}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Goldsmiths & setting craftsmen</div>
-          </CardContent>
-        </Card>
+  const currentData = activeTab === 'orders' ? filteredOrders : filteredArtisans;
+  const totalItems = currentData.length;
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const paginatedData = currentData.slice((page - 1) * limit, page * limit);
 
-        <Card className="bg-white border-slate-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Open Job Orders</div>
-            <div className="text-2xl font-black text-slate-800 font-mono mt-1">
-              {orders.filter((o: any) => o.status === 'ISSUED').length}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Orders awaiting finished piece return</div>
-          </CardContent>
-        </Card>
-      </div>
+  const statWidgets: StatWidget[] = [
+    {
+      label: 'Gold With Karigars',
+      value: `${totalGoldOutstanding.toFixed(2)}g`,
+      subtext: 'Raw metal in production',
+      variant: 'gold',
+    },
+    {
+      label: 'Active Artisans',
+      value: artisans?.length || 0,
+      subtext: 'Goldsmiths & setting craftsmen',
+      variant: 'default',
+      onClick: () => {
+        setActiveTab('artisans');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Open Job Orders',
+      value: orders.filter((o: any) => o.status === 'ISSUED').length,
+      subtext: 'Awaiting finished returns',
+      variant: 'blue',
+      onClick: () => {
+        setActiveTab('orders');
+        setStatusFilter('ISSUED');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Completed Orders',
+      value: orders.filter((o: any) => o.status === 'RECEIVED').length,
+      subtext: 'Reconciled & vaulted pieces',
+      variant: 'emerald',
+      onClick: () => {
+        setActiveTab('orders');
+        setStatusFilter('RECEIVED');
+        setPage(1);
+      },
+    },
+  ];
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200">
+  const filterSlot = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Tab Switcher */}
+      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          onClick={() => {
+            setActiveTab('orders');
+            setPage(1);
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === 'orders'
-              ? 'border-amber-600 text-amber-700'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'bg-white text-slate-900 shadow-xs font-semibold'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
-          onClick={() => setActiveTab('orders')}
         >
           Job-Work Orders ({orders.length})
         </button>
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          onClick={() => {
+            setActiveTab('artisans');
+            setPage(1);
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === 'artisans'
-              ? 'border-amber-600 text-amber-700'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'bg-white text-slate-900 shadow-xs font-semibold'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
-          onClick={() => setActiveTab('artisans')}
         >
           Karigar Directory ({artisans?.length || 0})
         </button>
       </div>
 
       {activeTab === 'orders' && (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <Table columns={orderColumns} data={orders} isLoading={ordersLoading} />
-        </div>
-      )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-56">
+            <CustomDropdown
+              value={selectedArtisanId}
+              onChange={(val) => {
+                setSelectedArtisanId(val);
+                setPage(1);
+              }}
+              placeholder="All Artisans"
+              options={[
+                { value: '', label: 'All Karigars / Artisans' },
+                ...(artisans?.map((a: any) => ({
+                  value: a.id,
+                  label: a.name,
+                  badge: a.code,
+                })) || []),
+              ]}
+            />
+          </div>
 
-      {activeTab === 'artisans' && (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <Table columns={artisanColumns} data={artisans} isLoading={artisansLoading} />
+          <div className="w-48">
+            <CustomDropdown
+              value={statusFilter}
+              onChange={(val) => {
+                setStatusFilter(val);
+                setPage(1);
+              }}
+              placeholder="All Statuses"
+              options={[
+                { value: '', label: 'All Order Statuses' },
+                { value: 'ISSUED', label: 'Issued / In Progress', badge: 'Active' },
+                { value: 'RECEIVED', label: 'Received & Reconciled', badge: 'Done' },
+                { value: 'CANCELLED', label: 'Cancelled', badge: 'Void' },
+              ]}
+            />
+          </div>
+
+          {(selectedArtisanId || statusFilter || search) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSelectedArtisanId('');
+                setStatusFilter('');
+                setSearch('');
+                setPage(1);
+              }}
+              className="text-xs text-slate-500 hover:text-slate-800"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+              Clear Filters
+            </Button>
+          )}
         </div>
       )}
+    </div>
+  );
+
+  return (
+    <>
+      <StandardPageLayout
+        title="Karigar & Job-Work Ledger"
+        description="Craftsman metal issuance, scrap returns, wastage reconciliation, and labor tracking"
+        badge="Manufacturing & Workshop"
+        stats={statWidgets}
+        searchPlaceholder={activeTab === 'orders' ? 'Search orders by #, craftsman, product...' : 'Search artisans by name, code, phone, skills...'}
+        searchValue={search}
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPage(1);
+        }}
+        filterSlot={filterSlot}
+        primaryAction={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsAddArtisanOpen(true)}>
+              <Plus className="w-4 h-4 mr-1.5" /> Register Karigar
+            </Button>
+            <Button size="sm" onClick={() => setIsIssueOrderOpen(true)}>
+              <Hammer className="w-4 h-4 mr-1.5" /> Issue Job Order
+            </Button>
+          </div>
+        }
+        isLoading={activeTab === 'orders' ? ordersLoading : artisansLoading}
+        totalCount={totalItems}
+        tableContent={
+          <Table
+            columns={activeTab === 'orders' ? orderColumns : artisanColumns}
+            data={paginatedData}
+            isLoading={activeTab === 'orders' ? ordersLoading : artisansLoading}
+          />
+        }
+        pagination={{
+          currentPage: page,
+          totalPages,
+          totalItems,
+          itemsPerPage: limit,
+          onPageChange: setPage,
+        }}
+      />
 
       {/* Register Karigar Modal */}
       <Modal
@@ -598,6 +726,6 @@ export function KarigarPage() {
           </div>
         )}
       </Modal>
-    </div>
+    </>
   );
 }

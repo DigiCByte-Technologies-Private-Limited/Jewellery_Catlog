@@ -4,26 +4,34 @@ import { bookingsApi } from '../../api/bookings.api';
 import { customersApi } from '../../api/customers.api';
 import { productsApi } from '../../api/products.api';
 import { metalRatesApi } from '../../api/metal-rates.api';
+import {
+  StandardPageLayout,
+  type StatWidget,
+} from '../../components/layout/StandardPageLayout';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
-import { Card, CardContent } from '../../components/ui/Card';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { useToast } from '../../components/ui/Toast';
 import {
   Lock,
   Plus,
   CheckCircle,
   Calendar,
+  RotateCcw,
 } from 'lucide-react';
 
 export function BookingsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const limit = 10;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedBookingToSettle, setSelectedBookingToSettle] = useState<any>(null);
 
@@ -264,71 +272,131 @@ export function BookingsPage() {
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Showroom Advance Bookings & Rate Lock</h1>
-          <p className="text-slate-500 text-sm">Wedding & festival pre-bookings with guaranteed benchmark rate-lock contracts</p>
-        </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="w-4 h-4 mr-1.5" /> New Advance Booking
+  // Filtered dataset
+  const filteredBookings = bookings.filter((b: any) => {
+    if (statusFilter && b.status !== statusFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesBooking = b.bookingNumber?.toLowerCase().includes(q);
+      const matchesCustomer = b.customer?.fullName?.toLowerCase().includes(q) || b.customer?.phone?.toLowerCase().includes(q);
+      const matchesProduct = b.product?.name?.toLowerCase().includes(q) || b.product?.sku?.toLowerCase().includes(q);
+      if (!matchesBooking && !matchesCustomer && !matchesProduct) return false;
+    }
+    return true;
+  });
+
+  const totalItems = filteredBookings.length;
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const paginatedBookings = filteredBookings.slice((page - 1) * limit, page * limit);
+
+  const statWidgets: StatWidget[] = [
+    {
+      label: 'Locked Gold Committed',
+      value: `${totalLockedWeight.toFixed(2)}g`,
+      subtext: 'Promised under rate-lock contract',
+      variant: 'gold',
+      onClick: () => {
+        setStatusFilter('');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Advance Money Collected',
+      value: `₹${totalAdvanceCollected.toLocaleString('en-IN')}`,
+      subtext: 'Customer deposits on contracts',
+      variant: 'emerald',
+    },
+    {
+      label: 'Active Bookings Pipeline',
+      value: bookings.filter((b: any) => b.status !== 'SETTLED' && b.status !== 'CANCELLED').length,
+      subtext: 'In making or ready for delivery',
+      variant: 'blue',
+      onClick: () => {
+        setStatusFilter('IN_MAKING');
+        setPage(1);
+      },
+    },
+    {
+      label: 'Settled & Delivered',
+      value: bookings.filter((b: any) => b.status === 'SETTLED').length,
+      subtext: 'Final delivery completed',
+      variant: 'default',
+      onClick: () => {
+        setStatusFilter('SETTLED');
+        setPage(1);
+      },
+    },
+  ];
+
+  const filterSlot = (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="w-64">
+        <CustomDropdown
+          value={statusFilter}
+          onChange={(val) => {
+            setStatusFilter(val);
+            setPage(1);
+          }}
+          placeholder="All Booking Statuses"
+          options={[
+            { value: '', label: 'All Bookings' },
+            { value: 'CONFIRMED', label: 'Confirmed Booking', badge: 'New' },
+            { value: 'IN_MAKING', label: 'In Workshop / Making', badge: 'Active' },
+            { value: 'READY', label: 'Ready for Delivery', badge: 'Ready' },
+            { value: 'SETTLED', label: 'Settled & Delivered', badge: 'Done' },
+            { value: 'CANCELLED', label: 'Cancelled Contract', badge: 'Void' },
+          ]}
+        />
+      </div>
+
+      {(statusFilter || search) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setStatusFilter('');
+            setSearch('');
+            setPage(1);
+          }}
+          className="text-xs text-slate-500 hover:text-slate-800"
+        >
+          <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+          Clear Filters
         </Button>
-      </div>
+      )}
+    </div>
+  );
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-white border-amber-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Locked Gold Committed</div>
-            <div className="text-2xl font-black text-amber-950 font-mono mt-1">
-              {totalLockedWeight.toFixed(3)} <span className="text-xs font-sans font-normal">grams</span>
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Gold promised to customers under contract</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-emerald-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Advance Money Collected</div>
-            <div className="text-2xl font-black text-emerald-950 font-mono mt-1">
-              ₹{totalAdvanceCollected.toLocaleString('en-IN')}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Total customer deposits on lock contracts</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-slate-200">
-          <CardContent className="pt-5">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Bookings Pipeline</div>
-            <div className="text-2xl font-black text-slate-800 font-mono mt-1">
-              {bookings.filter((b: any) => b.status !== 'SETTLED' && b.status !== 'CANCELLED').length}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">Confirmed / In Making / Ready for Delivery</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <div className="flex gap-2 border-b border-slate-200 pb-3">
-        {(['', 'CONFIRMED', 'IN_MAKING', 'READY', 'SETTLED'] as const).map((s) => (
-          <button
-            key={s || 'ALL'}
-            onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              statusFilter === s ? 'bg-amber-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {s ? s.replace('_', ' ') : 'All Bookings'}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        <Table columns={columns} data={bookings} isLoading={bookingsLoading} />
-      </div>
+  return (
+    <>
+      <StandardPageLayout
+        title="Showroom Advance Bookings & Rate Lock"
+        description="Wedding & festival pre-bookings with guaranteed benchmark rate-lock contracts"
+        badge="Rate-Lock & Advance"
+        stats={statWidgets}
+        searchPlaceholder="Search bookings by booking #, customer, phone, or design SKU..."
+        searchValue={search}
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPage(1);
+        }}
+        filterSlot={filterSlot}
+        primaryAction={
+          <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> New Advance Booking
+          </Button>
+        }
+        isLoading={bookingsLoading}
+        totalCount={totalItems}
+        tableContent={<Table columns={columns} data={paginatedBookings} />}
+        pagination={{
+          currentPage: page,
+          totalPages,
+          totalItems,
+          itemsPerPage: limit,
+          onPageChange: setPage,
+        }}
+      />
 
       {/* Create Booking Modal */}
       <Modal
@@ -584,6 +652,6 @@ export function BookingsPage() {
           </div>
         )}
       </Modal>
-    </div>
+    </>
   );
 }

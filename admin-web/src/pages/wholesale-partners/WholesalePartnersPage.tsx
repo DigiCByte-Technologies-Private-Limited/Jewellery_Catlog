@@ -14,18 +14,15 @@ import {
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { WholesalePartnerDetailModal } from './WholesalePartnerDetailModal';
 import {
-  ShieldCheck,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  Building2,
   FileCheck,
   Eye,
   RefreshCw,
   Phone,
   Mail,
+  RotateCcw,
 } from 'lucide-react';
 
 export function WholesalePartnersPage() {
@@ -36,7 +33,7 @@ export function WholesalePartnersPage() {
   const [statusFilter, setStatusFilter] = useState<WholesaleApplicationStatus | ''>('');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [page, setPage] = useState(1);
-  const limit = 15;
+  const limit = 10;
 
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -90,36 +87,51 @@ export function WholesalePartnersPage() {
       label: 'Total Applications',
       value: stats.totalAll,
       subtext: 'Registered wholesale accounts',
-      watermarkIcon: <Building2 className="w-16 h-16 text-slate-400" />,
       variant: 'default',
+      onClick: () => {
+        setStatusFilter('');
+        setPage(1);
+      },
     },
     {
       label: 'Pending Review',
       value: stats.pendingReview,
       subtext: 'Awaiting KYC compliance check',
-      watermarkIcon: <Clock className="w-16 h-16 text-amber-500" />,
       variant: 'gold',
+      onClick: () => {
+        setStatusFilter('PENDING_REVIEW');
+        setPage(1);
+      },
     },
     {
       label: 'Under Verification',
       value: stats.underReview,
       subtext: 'Actively in inspection',
-      watermarkIcon: <RefreshCw className="w-16 h-16 text-blue-500" />,
       variant: 'blue',
+      onClick: () => {
+        setStatusFilter('UNDER_REVIEW');
+        setPage(1);
+      },
     },
     {
       label: 'Approved Partners',
       value: stats.approved,
       subtext: 'Active wholesale accounts',
-      watermarkIcon: <CheckCircle2 className="w-16 h-16 text-emerald-500" />,
       variant: 'emerald',
+      onClick: () => {
+        setStatusFilter('APPROVED');
+        setPage(1);
+      },
     },
     {
       label: 'Requires Revision',
       value: stats.rejected,
       subtext: 'Returned for correction',
-      watermarkIcon: <AlertTriangle className="w-16 h-16 text-red-500" />,
       variant: 'purple',
+      onClick: () => {
+        setStatusFilter('REJECTED');
+        setPage(1);
+      },
     },
   ];
 
@@ -226,21 +238,40 @@ export function WholesalePartnersPage() {
   ];
 
   const filterSlot = (
-    <div className="flex items-center gap-2">
-      <select
-        value={statusFilter}
-        onChange={(e) => {
-          setStatusFilter(e.target.value as any);
-          setPage(1);
-        }}
-        className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-      >
-        <option value="">All Statuses ({stats.totalAll})</option>
-        <option value="PENDING_REVIEW">Pending Review ({stats.pendingReview})</option>
-        <option value="UNDER_REVIEW">Under Review ({stats.underReview})</option>
-        <option value="APPROVED">Approved ({stats.approved})</option>
-        <option value="REJECTED">Requires Revision ({stats.rejected})</option>
-      </select>
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="w-64">
+        <CustomDropdown
+          value={statusFilter}
+          onChange={(val) => {
+            setStatusFilter(val as any);
+            setPage(1);
+          }}
+          placeholder="All Statuses"
+          options={[
+            { value: '', label: `All Statuses (${stats.totalAll})` },
+            { value: 'PENDING_REVIEW', label: `Pending Review (${stats.pendingReview})`, badge: 'Pending' },
+            { value: 'UNDER_REVIEW', label: `Under Review (${stats.underReview})`, badge: 'Review' },
+            { value: 'APPROVED', label: `Approved (${stats.approved})`, badge: 'Active' },
+            { value: 'REJECTED', label: `Requires Revision (${stats.rejected})`, badge: 'Revision' },
+          ]}
+        />
+      </div>
+
+      {(statusFilter || search) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setStatusFilter('');
+            setSearch('');
+            setPage(1);
+          }}
+          className="text-xs text-slate-500 hover:text-slate-800"
+        >
+          <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" />
+          Clear Filters
+        </Button>
+      )}
 
       <Button
         variant="secondary"
@@ -296,7 +327,6 @@ export function WholesalePartnersPage() {
         title="Wholesale Partner Verifications"
         description="Review wholesale registration applications, inspect private KYC documents, and approve or reject wholesale partner accounts."
         badge="Compliance & Onboarding"
-        headerWatermark={<ShieldCheck className="w-48 h-48 text-amber-500/10" />}
         stats={statWidgets}
         searchPlaceholder="Search applications by ID, firm name, owner, phone, email, PAN, GST..."
         searchValue={search}

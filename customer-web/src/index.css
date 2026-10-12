@@ -2,9 +2,9 @@
 
 @layer base {
   :root {
-    --font-serif: 'Cinzel', serif;
-    --font-display: 'Cormorant Garamond', serif;
-    --font-sans: 'Montserrat', sans-serif;
+    --font-serif: 'Playfair Display', serif;
+    --font-display: 'Playfair Display', serif;
+    --font-sans: 'Jost', sans-serif;
   }
 
   html {
@@ -16,8 +16,8 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #FAF8F5;
-    color: #1C1917;
+    background-color: #F9F5EC;
+    color: #1C1A17;
     overflow-x: hidden;
     overscroll-behavior-y: none;
   }
@@ -94,4 +94,38 @@
   background: #B89047;
 }
 
+/* Infinite Marquee Animation */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
 
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+  display: flex;
+  width: max-content;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+@layer utilities {
+  .luxury-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #E7E5E4 transparent;
+  }
+  .luxury-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .luxury-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .luxury-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #E7E5E4;
+    border-radius: 10px;
+  }
+  .luxury-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #D6D3D1;
+  }
+}

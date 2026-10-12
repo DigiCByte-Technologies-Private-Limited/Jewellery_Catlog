@@ -10,10 +10,10 @@ import {
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { CustomDropdown } from '../../components/ui/CustomDropdown';
 import { RequestDetailModal } from './RequestDetailModal';
 import {
   MessageSquareQuote,
-  Inbox,
   Clock,
   CheckCircle2,
   XCircle,
@@ -27,22 +27,48 @@ import {
   Store,
   Compass,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 
 export function RequestsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlRequestId = searchParams.get('id');
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [purchaseStatusFilter, setPurchaseStatusFilter] = useState('');
-  const [storeFilter, setStoreFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
-  const [sortBy, setSortBy] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
+  const [purchaseStatusFilter, setPurchaseStatusFilter] = useState(searchParams.get('purchaseStatus') || '');
+  const [storeFilter, setStoreFilter] = useState(searchParams.get('storeId') || '');
+  const [priorityFilter, setPriorityFilter] = useState(searchParams.get('priority') || '');
+  const sortBy = 'createdAt';
+  const sortOrder = 'DESC';
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(Number(searchParams.get('limit')) || 10);
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+
+  const updateFilterParam = (key: string, val: string) => {
+    setPage(1);
+    const params = new URLSearchParams(searchParams);
+    if (val) {
+      params.set(key, val);
+    } else {
+      params.delete(key);
+    }
+    setSearchParams(params);
+  };
+
+  const resetAllFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setPurchaseStatusFilter('');
+    setStoreFilter('');
+    setPriorityFilter('');
+    setPage(1);
+    setSearchParams({});
+  };
+
+  const hasActiveFilters = Boolean(
+    search || statusFilter || purchaseStatusFilter || storeFilter || priorityFilter
+  );
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -139,47 +165,99 @@ export function RequestsPage() {
   const requests: ProductRequestItem[] = listResponse?.data || [];
   const meta = listResponse?.meta || { total: 0, page: 1, limit: 10, totalPages: 1 };
 
-  const handleOpenDetail = (req: ProductRequestItem) => {
+  const [detailInitialTab, setDetailInitialTab] = useState<'workflow' | 'assignment' | 'history'>('workflow');
+  const [detailInitialChannel, setDetailInitialChannel] = useState<'STORE' | 'PARTNER'>('STORE');
+
+  const handleOpenDetail = (
+    req: ProductRequestItem,
+    tab?: 'workflow' | 'assignment' | 'history',
+    channel?: 'STORE' | 'PARTNER'
+  ) => {
     setSelectedRequestId(req.id || req.requestId);
+    setDetailInitialTab(tab || (!req.assignedStoreId && !req.assignedToUserId ? 'assignment' : 'workflow'));
+    setDetailInitialChannel(channel || (req.assignedToUserId ? 'PARTNER' : 'STORE'));
     setIsDetailOpen(true);
   };
 
-  // Stat Widgets
+  // Stat Widgets (Interactive Quick Filters)
   const statWidgets: StatWidget[] = [
     {
       label: 'Total Requests',
       value: stats.total,
       subtext: 'Inbound customer product leads',
-      watermarkIcon: <Inbox className="w-16 h-16" />,
       variant: 'default',
+      clickable: true,
+      isActive: !hasActiveFilters,
+      actionHint: !hasActiveFilters ? 'Showing All' : 'Reset & Show All',
+      onClick: resetAllFilters,
     },
     {
       label: 'Unassigned (New)',
       value: stats.new,
       subtext: stats.new > 0 ? 'Awaiting showroom assignment' : 'All assigned to stores',
-      watermarkIcon: <AlertCircle className="w-16 h-16" />,
-      variant: stats.new > 0 ? 'gold' : 'default',
+      variant: 'gold',
+      clickable: true,
+      isActive: statusFilter === 'NEW',
+      actionHint: statusFilter === 'NEW' ? 'Active Filter (Click to Reset)' : 'Click to Filter New',
+      onClick: () => {
+        const next = statusFilter === 'NEW' ? '' : 'NEW';
+        setStatusFilter(next);
+        updateFilterParam('status', next);
+      },
     },
     {
       label: 'Assigned & In Follow-up',
       value: stats.assigned + stats.followUp,
       subtext: `${stats.assigned} assigned, ${stats.followUp} in outreach`,
-      watermarkIcon: <Store className="w-16 h-16" />,
       variant: 'blue',
+      clickable: true,
+      isActive: statusFilter === 'ASSIGNED' || statusFilter === 'FOLLOW_UP',
+      actionHint:
+        statusFilter === 'ASSIGNED' || statusFilter === 'FOLLOW_UP'
+          ? 'Active Filter (Click to Reset)'
+          : 'Click to Filter Assigned',
+      onClick: () => {
+        const next =
+          statusFilter === 'ASSIGNED' || statusFilter === 'FOLLOW_UP'
+            ? ''
+            : 'ASSIGNED';
+        setStatusFilter(next);
+        updateFilterParam('status', next);
+      },
     },
     {
       label: 'Purchases Confirmed',
       value: stats.approvedPurchases,
       subtext: `Customer bought (${stats.conversionRate}% conversion)`,
-      watermarkIcon: <CheckCircle2 className="w-16 h-16" />,
       variant: 'emerald',
+      clickable: true,
+      isActive: purchaseStatusFilter === 'APPROVED',
+      actionHint:
+        purchaseStatusFilter === 'APPROVED'
+          ? 'Active Filter (Click to Reset)'
+          : 'Click to Filter Purchased',
+      onClick: () => {
+        const next = purchaseStatusFilter === 'APPROVED' ? '' : 'APPROVED';
+        setPurchaseStatusFilter(next);
+        updateFilterParam('purchaseStatus', next);
+      },
     },
     {
       label: 'Pending Customer Decisions',
       value: stats.pendingPurchases,
       subtext: `${stats.rejectedPurchases} customer declined`,
-      watermarkIcon: <Clock className="w-16 h-16" />,
       variant: 'gold',
+      clickable: true,
+      isActive: purchaseStatusFilter === 'PENDING',
+      actionHint:
+        purchaseStatusFilter === 'PENDING'
+          ? 'Active Filter (Click to Reset)'
+          : 'Click to Filter Pending',
+      onClick: () => {
+        const next = purchaseStatusFilter === 'PENDING' ? '' : 'PENDING';
+        setPurchaseStatusFilter(next);
+        updateFilterParam('purchaseStatus', next);
+      },
     },
   ];
 
@@ -302,6 +380,21 @@ export function RequestsPage() {
             </div>
           );
         }
+        if (r.assignedPartner) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <div>
+                <div className="text-xs font-semibold text-emerald-950 truncate max-w-[140px]">
+                  {r.assignedPartner.companyName}
+                </div>
+                <div className="text-[10px] text-emerald-700 font-mono">
+                  {r.assignedPartner.city ? `${r.assignedPartner.city} · ` : ''}Partner
+                </div>
+              </div>
+            </div>
+          );
+        }
         if (r.assignedToUserId) {
           const partner = partners.find((p) => p.userId === r.assignedToUserId);
           return (
@@ -365,7 +458,7 @@ export function RequestsPage() {
       header: 'Date',
       cell: (r: ProductRequestItem) => (
         <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1">
-          <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+          <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <span>
             {new Date(r.createdAt).toLocaleDateString('en-IN', {
               day: '2-digit',
@@ -383,7 +476,13 @@ export function RequestsPage() {
           size="sm"
           variant="outline"
           className="text-xs py-1 px-2.5 h-7"
-          onClick={() => handleOpenDetail(r)}
+          onClick={() =>
+            handleOpenDetail(
+              r,
+              r.assignedStoreId || r.assignedToUserId ? 'workflow' : 'assignment',
+              r.assignedToUserId ? 'PARTNER' : 'STORE'
+            )
+          }
         >
           <Eye className="w-3.5 h-3.5 mr-1 text-slate-500" />
           {r.assignedStoreId || r.assignedToUserId ? 'View / Follow-up' : 'Assign'}
@@ -503,10 +602,12 @@ export function RequestsPage() {
                       <Store className="w-3.5 h-3.5 shrink-0" />
                       {r.assignedStore.name} ({r.assignedStore.city})
                     </span>
-                  ) : r.assignedToUserId ? (
+                  ) : r.assignedPartner || r.assignedToUserId ? (
                     <span className="font-semibold text-emerald-700 flex items-center gap-1 truncate max-w-[200px]">
                       <Building2 className="w-3.5 h-3.5 shrink-0" />
-                      {partners.find((p) => p.userId === r.assignedToUserId)?.companyName || 'Wholesale Partner'}
+                      {r.assignedPartner?.companyName ||
+                        partners.find((p) => p.userId === r.assignedToUserId)?.companyName ||
+                        'Wholesale Partner'}
                     </span>
                   ) : (
                     <span className="font-semibold text-amber-700 flex items-center gap-1">
@@ -535,7 +636,13 @@ export function RequestsPage() {
                   size="sm"
                   variant="outline"
                   className="text-xs py-1 px-2.5 h-7"
-                  onClick={() => handleOpenDetail(r)}
+                  onClick={() =>
+                    handleOpenDetail(
+                      r,
+                      r.assignedStoreId || r.assignedToUserId ? 'workflow' : 'assignment',
+                      r.assignedToUserId ? 'PARTNER' : 'STORE'
+                    )
+                  }
                 >
                   <Eye className="w-3.5 h-3.5 mr-1 text-slate-500" />
                   {r.assignedStoreId || r.assignedToUserId ? 'View & Follow-up' : 'Assign'}
@@ -572,91 +679,87 @@ export function RequestsPage() {
       searchValue={search}
       onSearchChange={(val) => {
         setSearch(val);
-        setPage(1);
+        updateFilterParam('search', val);
       }}
       filterSlot={
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Store Filter */}
-          <select
-            value={storeFilter}
-            onChange={(e) => {
-              setStoreFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs rounded-lg border border-slate-300 py-1.5 px-2 bg-white focus:outline-none focus:border-amber-500 text-slate-700 font-medium"
-          >
-            <option value="">All Showrooms / Stores</option>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.city})
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 justify-between w-full">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 flex-1">
+            <CustomDropdown
+              value={storeFilter}
+              onChange={(val) => {
+                setStoreFilter(val);
+                updateFilterParam('storeId', val);
+              }}
+              placeholder="All Showrooms"
+              options={[
+                { label: 'All Showrooms', value: '' },
+                ...stores.map((s) => ({
+                  label: `${s.name} (${s.city})`,
+                  value: s.id,
+                  badge: s.city,
+                })),
+              ]}
+            />
 
-          {/* Workflow Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs rounded-lg border border-slate-300 py-1.5 px-2 bg-white focus:outline-none focus:border-amber-500 text-slate-700"
-          >
-            <option value="">All Workflow States</option>
-            <option value="NEW">New (Unassigned)</option>
-            <option value="ASSIGNED">Assigned to Store</option>
-            <option value="FOLLOW_UP">In Follow-Up</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+            <CustomDropdown
+              value={statusFilter}
+              onChange={(val) => {
+                setStatusFilter(val);
+                updateFilterParam('status', val);
+              }}
+              placeholder="All Workflow States"
+              options={[
+                { label: 'All Workflow States', value: '' },
+                { label: 'New (Unassigned)', value: 'NEW', badge: 'Action' },
+                { label: 'Assigned to Store', value: 'ASSIGNED', badge: 'Dispatched' },
+                { label: 'In Follow-Up', value: 'FOLLOW_UP', badge: 'Contacted' },
+                { label: 'Completed', value: 'COMPLETED', badge: 'Done' },
+                { label: 'Cancelled', value: 'CANCELLED', badge: 'Closed' },
+              ]}
+            />
 
-          {/* Customer Purchase Outcome Filter */}
-          <select
-            value={purchaseStatusFilter}
-            onChange={(e) => {
-              setPurchaseStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs rounded-lg border border-slate-300 py-1.5 px-2 bg-white focus:outline-none focus:border-amber-500 text-slate-700 font-semibold"
-          >
-            <option value="">All Purchase Outcomes</option>
-            <option value="PENDING">Pending Customer Decision</option>
-            <option value="APPROVED">Customer Purchased (Approved)</option>
-            <option value="REJECTED">Customer Declined (Rejected)</option>
-          </select>
+            <CustomDropdown
+              value={purchaseStatusFilter}
+              onChange={(val) => {
+                setPurchaseStatusFilter(val);
+                updateFilterParam('purchaseStatus', val);
+              }}
+              placeholder="All Outcomes"
+              options={[
+                { label: 'All Outcomes', value: '' },
+                { label: 'Pending Decision', value: 'PENDING', badge: 'Pending' },
+                { label: 'Customer Purchased', value: 'APPROVED', badge: 'Purchased' },
+                { label: 'Customer Declined', value: 'REJECTED', badge: 'Declined' },
+              ]}
+            />
 
-          {/* Priority Filter */}
-          <select
-            value={priorityFilter}
-            onChange={(e) => {
-              setPriorityFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs rounded-lg border border-slate-300 py-1.5 px-2 bg-white focus:outline-none focus:border-amber-500 text-slate-700"
-          >
-            <option value="">All Priorities</option>
-            <option value="LOW">Low</option>
-            <option value="NORMAL">Normal</option>
-            <option value="HIGH">High</option>
-            <option value="URGENT">Urgent</option>
-          </select>
+            <CustomDropdown
+              value={priorityFilter}
+              onChange={(val) => {
+                setPriorityFilter(val);
+                updateFilterParam('priority', val);
+              }}
+              placeholder="All Priorities"
+              options={[
+                { label: 'All Priorities', value: '' },
+                { label: 'Low', value: 'LOW', badge: 'Low' },
+                { label: 'Normal', value: 'NORMAL', badge: 'Normal' },
+                { label: 'High', value: 'HIGH', badge: 'High' },
+                { label: 'Urgent', value: 'URGENT', badge: 'Urgent' },
+              ]}
+            />
+          </div>
 
-          {/* Sort By */}
-          <select
-            value={`${sortBy}:${sortOrder}`}
-            onChange={(e) => {
-              const [sb, so] = e.target.value.split(':');
-              setSortBy(sb);
-              setSortOrder(so as 'ASC' | 'DESC');
-              setPage(1);
-            }}
-            className="text-xs rounded-lg border border-slate-300 py-1.5 px-2 bg-white focus:outline-none focus:border-amber-500 text-slate-700"
-          >
-            <option value="createdAt:DESC">Newest First</option>
-            <option value="createdAt:ASC">Oldest First</option>
-            <option value="priority:DESC">Priority High-Low</option>
-            <option value="status:ASC">Workflow Status</option>
-          </select>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="self-end sm:self-center text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 font-semibold px-3 py-1.5 rounded-lg shrink-0 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Clear</span>
+            </button>
+          )}
         </div>
       }
       viewMode={viewMode}
@@ -668,13 +771,14 @@ export function RequestsPage() {
       cardGridContent={renderCardGrid()}
       pagination={{
         currentPage: page,
-        totalPages: meta.totalPages,
-        totalItems: meta.total,
+        totalPages: meta.totalPages || 1,
+        totalItems: meta.total || 0,
         itemsPerPage: limit,
         onPageChange: (newPage) => setPage(newPage),
         onItemsPerPageChange: (newLimit) => {
           setLimit(newLimit);
           setPage(1);
+          updateFilterParam('limit', newLimit === 10 ? '' : String(newLimit));
         },
       }}
       footerInfo={
@@ -693,6 +797,8 @@ export function RequestsPage() {
       <RequestDetailModal
         requestId={selectedRequestId}
         isOpen={isDetailOpen}
+        initialTab={detailInitialTab}
+        initialChannel={detailInitialChannel}
         onClose={() => {
           setIsDetailOpen(false);
           setSelectedRequestId(null);

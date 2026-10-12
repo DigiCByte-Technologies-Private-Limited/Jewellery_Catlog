@@ -44,31 +44,39 @@ export class UsersService {
     const { page = 1, limit = 20, role, isActive, search } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
-    if (role) where.role = role;
-    if (isActive !== undefined) where.isActive = isActive;
-    if (search) where.email = ILike(`%${search}%`);
+    const qb = this.userRepo
+      .createQueryBuilder('u')
+      .select([
+        'u.id',
+        'u.email',
+        'u.fullName',
+        'u.phone',
+        'u.role',
+        'u.isActive',
+        'u.isTotpEnabled',
+        'u.lastLoginAt',
+        'u.lastLoginIp',
+        'u.createdAt',
+        'u.updatedAt',
+      ])
+      .orderBy('u.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
 
-    const [users, total] = await this.userRepo.findAndCount({
-      where,
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        phone: true,
-        role: true,
-        isActive: true,
-        isTotpEnabled: true,
-        lastLoginAt: true,
-        lastLoginIp: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      skip,
-      take: limit,
-      order: { createdAt: 'DESC' },
-      withDeleted: false,
-    });
+    if (role) {
+      qb.andWhere('u.role = :role', { role });
+    }
+    if (isActive !== undefined) {
+      qb.andWhere('u.isActive = :isActive', { isActive });
+    }
+    if (search && search.trim()) {
+      qb.andWhere(
+        '(LOWER(u.email) LIKE :search OR LOWER(u.fullName) LIKE :search OR u.phone LIKE :search)',
+        { search: `%${search.trim().toLowerCase()}%` },
+      );
+    }
+
+    const [users, total] = await qb.getManyAndCount();
 
     return {
       success: true,

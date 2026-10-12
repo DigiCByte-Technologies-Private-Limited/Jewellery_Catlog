@@ -153,6 +153,18 @@ export class AssignStoreDto {
   note?: string;
 }
 
+export class AssignPartnerDto {
+  @ApiProperty({ example: 'c9aca7e8-0f5d-44bc-9dea-5962aecfaff8', description: 'Wholesale Partner User UUID or Profile UUID' })
+  @IsNotEmpty({ message: 'Partner ID is required' })
+  @IsUUID('4', { message: 'Invalid Partner UUID' })
+  partnerUserId: string;
+
+  @ApiPropertyOptional({ example: 'High value customer in Chirala interested in 22K bridal choker.' })
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
 export class StoreFollowUpDto {
   @ApiProperty({ example: 'Contacted customer by phone. Discussed 22K rate and delivery schedule.' })
   @IsNotEmpty({ message: 'Follow-up note is required' })

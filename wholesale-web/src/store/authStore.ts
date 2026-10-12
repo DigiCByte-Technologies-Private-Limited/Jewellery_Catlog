@@ -196,7 +196,14 @@ export const useAuthStore = create<AuthState>()(
 // Axios request interceptor — auto-attach token
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
-  if (token) config.headers['Authorization'] = `Bearer ${token}`;
+  if (token) {
+    if (config.headers && typeof (config.headers as any).set === 'function') {
+      (config.headers as any).set('Authorization', `Bearer ${token}`);
+    } else {
+      config.headers = config.headers || {};
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
   return config;
 });
 
@@ -204,16 +211,35 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    if (err.response?.status === 401 && !err.config._retry) {
-      err.config._retry = true;
+    const originalRequest = err.config;
+    // Don't retry if already retried or if this is the refresh/login/logout call itself
+    if (
+      err.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/refresh') &&
+      !originalRequest.url?.includes('/login')
+    ) {
+      originalRequest._retry = true;
       try {
-        const refreshRes = await axios.post('http://localhost:3001/api/v1/auth/refresh', {}, { withCredentials: true });
-        const newToken = refreshRes.data.data.accessToken;
+        const refreshRes = await axios.post(
+          'http://localhost:3001/api/v1/wholesale/auth/refresh',
+          {},
+          { withCredentials: true }
+        );
+        const newToken = refreshRes.data?.data?.accessToken;
+        if (!newToken) throw new Error('No access token in refresh payload');
         useAuthStore.getState().setToken(newToken);
-        err.config.headers['Authorization'] = `Bearer ${newToken}`;
-        return api(err.config);
-      } catch {
+        if (originalRequest.headers && typeof (originalRequest.headers as any).set === 'function') {
+          (originalRequest.headers as any).set('Authorization', `Bearer ${newToken}`);
+        } else {
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+        }
+        return api(originalRequest);
+      } catch (refreshErr) {
         useAuthStore.getState().logout();
+        return Promise.reject(refreshErr);
       }
     }
     return Promise.reject(err);

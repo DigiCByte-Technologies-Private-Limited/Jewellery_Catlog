@@ -15,6 +15,7 @@ import {
   Sparkles,
   ExternalLink,
 } from 'lucide-react';
+import { isValidEmail } from '../utils/validation';
 
 interface FooterProps {
   onOpenConsultation?: () => void;
@@ -69,8 +70,7 @@ export const Footer: React.FC<FooterProps> = ({
     e.preventDefault();
     setSubscriptionError('');
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!newsletterEmail.trim() || !emailRegex.test(newsletterEmail.trim())) {
+    if (!newsletterEmail.trim() || !isValidEmail(newsletterEmail.trim())) {
       setSubscriptionError('Please enter a valid patron email address.');
       return;
     }
@@ -414,7 +414,11 @@ export const Footer: React.FC<FooterProps> = ({
                       if (subscriptionError) setSubscriptionError('');
                     }}
                     placeholder="Enter your email address"
-                    className="w-full px-4 py-3 rounded-full bg-white border border-stone-200 focus:border-[#B89047] text-xs text-stone-800 focus:outline-none placeholder-stone-400 shadow-2xs pr-12 transition-all"
+                    className={`w-full px-4 py-3 rounded-full bg-white border text-xs text-stone-800 focus:outline-none placeholder-stone-400 shadow-2xs pr-12 transition-all ${
+                      subscriptionError
+                        ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500'
+                        : 'border-stone-200 focus:border-[#B89047]'
+                    }`}
                   />
                   <button
                     type="submit"

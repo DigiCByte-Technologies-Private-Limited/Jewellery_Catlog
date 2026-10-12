@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { FC } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Sparkles,
   ShoppingBag,
@@ -9,12 +10,13 @@ import {
   X,
   TrendingUp,
   RefreshCw,
-  ChevronDown,
   RotateCcw,
+  ArrowUpDown,
 } from 'lucide-react';
 import type { CartItem } from './LuxuryCartDrawer';
 import type { InquiryProductContext } from './ProductInquiryModal';
 import { productsApi, type CatalogProduct } from '../api/products.api';
+import { LuxuryDropdown, type LuxuryDropdownOption } from './LuxuryDropdown';
 
 interface CuratedSpotlightProps {
   onSelectModel: (model: 'solitaire-ring' | 'emerald-ring' | 'solitaire-bracelet') => void;
@@ -29,12 +31,48 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
   onAddToCart,
   onOpenInquiry,
 }) => {
-  // Filters state
-  const [search, setSearch] = useState('');
-  const [metalFilter, setMetalFilter] = useState<string>('');
-  const [purityFilter, setPurityFilter] = useState<string>('');
-  const [weightFilter, setWeightFilter] = useState<string>('');
-  const [priceFilter, setPriceFilter] = useState<string>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Filters state (Synced with URL)
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const categoryFilter = searchParams.get('category') || '';
+  const metalFilter = searchParams.get('metal') || '';
+  const purityFilter = searchParams.get('purity') || '';
+  const weightFilter = searchParams.get('weight') || '';
+  const priceFilter = searchParams.get('price') || '';
+  const sortFilter = searchParams.get('sort') || 'featured';
+
+  // We need to provide setters that ALSO update the URL so the local components still work
+  const setCategoryFilter = (val: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (val) params.set('category', val); else params.delete('category');
+    setSearchParams(params);
+  };
+  const setMetalFilter = (val: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (val) params.set('metal', val); else params.delete('metal');
+    setSearchParams(params);
+  };
+  const setPurityFilter = (val: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (val) params.set('purity', val); else params.delete('purity');
+    setSearchParams(params);
+  };
+  const setWeightFilter = (val: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (val) params.set('weight', val); else params.delete('weight');
+    setSearchParams(params);
+  };
+  const setPriceFilter = (val: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (val) params.set('price', val); else params.delete('price');
+    setSearchParams(params);
+  };
+  const setSortFilter = (val: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (val) params.set('sort', val); else params.delete('sort');
+    setSearchParams(params);
+  };
 
   // Products from API
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -67,18 +105,60 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
   const loadProducts = async () => {
     setIsLoading(true);
     try {
+      const searchQuery = [search, categoryFilter].filter(Boolean).join(' ');
+      let sortBy = 'createdAt';
+      let sortOrder: 'ASC' | 'DESC' = 'DESC';
+      if (sortFilter === 'price-asc') {
+        sortBy = 'fixedPrice';
+        sortOrder = 'ASC';
+      } else if (sortFilter === 'price-desc') {
+        sortBy = 'fixedPrice';
+        sortOrder = 'DESC';
+      } else if (sortFilter === 'weight-desc') {
+        sortBy = 'grossWeight';
+        sortOrder = 'DESC';
+      } else if (sortFilter === 'weight-asc') {
+        sortBy = 'grossWeight';
+        sortOrder = 'ASC';
+      } else if (sortFilter === 'name-asc') {
+        sortBy = 'name';
+        sortOrder = 'ASC';
+      }
+
       const res = await productsApi.getAll({
-        search: search || undefined,
+        search: searchQuery || undefined,
         metalType: metalFilter || undefined,
         purity: purityFilter || undefined,
         weightRange: weightFilter || undefined,
         priceRange: priceFilter || undefined,
+        sortBy,
+        sortOrder,
         limit: 30,
       });
 
       if (res.data?.data) {
-        setProducts(res.data.data);
-        setTotalProducts(res.data.meta?.total ?? res.data.total ?? res.data.data.length);
+        let list = [...res.data.data];
+        if (sortFilter === 'price-asc') {
+          list.sort(
+            (a, b) =>
+              (a.currentPrice || a.priceBreakdown?.finalSellingPrice || a.fixedPrice || 0) -
+              (b.currentPrice || b.priceBreakdown?.finalSellingPrice || b.fixedPrice || 0)
+          );
+        } else if (sortFilter === 'price-desc') {
+          list.sort(
+            (a, b) =>
+              (b.currentPrice || b.priceBreakdown?.finalSellingPrice || b.fixedPrice || 0) -
+              (a.currentPrice || a.priceBreakdown?.finalSellingPrice || a.fixedPrice || 0)
+          );
+        } else if (sortFilter === 'weight-desc') {
+          list.sort((a, b) => Number(b.grossWeight || 0) - Number(a.grossWeight || 0));
+        } else if (sortFilter === 'weight-asc') {
+          list.sort((a, b) => Number(a.grossWeight || 0) - Number(b.grossWeight || 0));
+        } else if (sortFilter === 'name-asc') {
+          list.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        setProducts(list);
+        setTotalProducts(res.data.meta?.total ?? res.data.total ?? list.length);
       }
     } catch (err) {
       console.warn('Could not load live catalog products:', err);
@@ -92,19 +172,22 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
       loadProducts();
     }, 200);
     return () => clearTimeout(timer);
-  }, [search, metalFilter, purityFilter, weightFilter, priceFilter]);
+  }, [search, categoryFilter, metalFilter, purityFilter, weightFilter, priceFilter, sortFilter]);
 
   // Reset all filters
   const resetFilters = () => {
     setSearch('');
+    setCategoryFilter('');
     setMetalFilter('');
     setPurityFilter('');
     setWeightFilter('');
     setPriceFilter('');
+    setSortFilter('featured');
+    setSearchParams({});
   };
 
   const hasActiveFilters = Boolean(
-    search || metalFilter || purityFilter || weightFilter || priceFilter
+    search || categoryFilter || metalFilter || purityFilter || weightFilter || priceFilter || (sortFilter && sortFilter !== 'featured')
   );
 
   const getProductImage = (item: CatalogProduct) => {
@@ -116,21 +199,79 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
     );
   };
 
-  return (
-    <section id="collections" className="py-16 sm:py-24 lg:py-28 relative overflow-hidden bg-[#FAF8F5]">
-      {/* Subtle Ambient Background Glow */}
-      <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-96 h-96 bg-amber-400/10 rounded-full blur-3xl pointer-events-none ambient-glow" />
+  const categoryOptions: LuxuryDropdownOption[] = [
+    { value: '', label: 'View All Categories', sublabel: 'Explore Complete Catalog', icon: '✨' },
+    { value: 'earring', label: 'EARRINGS', icon: '✨' },
+    { value: 'bracelet', label: 'BRACELET', icon: '💫' },
+    { value: 'necklace', label: 'NECKLACE', icon: '📿' },
+    { value: 'ring', label: 'RINGS', icon: '💍' },
+    { value: 'bangle', label: 'BANGLES', icon: '💫' },
+  ];
 
+  const metalOptions: LuxuryDropdownOption[] = [
+    { value: '', label: 'All Metals', sublabel: 'Gold & Silver' },
+    { value: 'GOLD', label: 'Fine Gold', sublabel: '24K, 22K, 18K, 14K' },
+    { value: 'SILVER', label: 'Sterling Silver', sublabel: '999 & 925' },
+  ];
+
+  const purityOptions: LuxuryDropdownOption[] =
+    metalFilter === 'GOLD'
+      ? [
+          { value: '', label: 'All Gold Purities', sublabel: '24K, 22K, 18K & 14K Purities' },
+          { value: 'K24', label: '24K Fine Gold', sublabel: '99.9% Pure Investment Bullion', badge: '999 Pure' },
+          { value: 'K22', label: '22K Traditional', sublabel: '91.6% BIS Hallmark 916 Bridal', badge: 'BIS 916' },
+          { value: 'K18', label: '18K Fine Joaillerie', sublabel: '75.0% Diamond Setting Gold', badge: '18K 750' },
+          { value: 'K14', label: '14K Everyday Fine', sublabel: '58.5% Contemporary Fine Wear', badge: '14K 585' },
+        ]
+      : metalFilter === 'SILVER'
+      ? [
+          { value: '', label: 'All Silver Purities', sublabel: '999 Bullion & 925 Sterling' },
+          { value: 'SILVER_999', label: '999 Fine Bullion Silver', sublabel: '99.9% Pure Solid Bullion', badge: '999 Fine' },
+          { value: 'SILVER_925', label: '925 Sterling Silver', sublabel: '92.5% Solid Hallmarked Silver', badge: 'Sterling' },
+        ]
+      : [
+          { value: '', label: 'All Purities (Gold & Silver)', sublabel: 'Complete Hallmark Catalog' },
+          { value: 'K24', label: 'Gold 24K (999 Pure)', sublabel: '99.9% Pure Investment Gold', badge: '24K' },
+          { value: 'K22', label: 'Gold 22K (916 Hallmark)', sublabel: '91.6% BIS Certified Hallmark', badge: '22K' },
+          { value: 'K18', label: 'Gold 18K (750 Fine)', sublabel: '75.0% Fine Joaillerie Gold', badge: '18K' },
+          { value: 'SILVER_999', label: 'Silver 999 Bullion', sublabel: '99.9% Pure Fine Silver', badge: '999' },
+          { value: 'SILVER_925', label: 'Silver 925 Sterling', sublabel: '92.5% Solid Sterling Silver', badge: '925' },
+        ];
+
+  const weightOptions: LuxuryDropdownOption[] = [
+    { value: '', label: 'All Weight Tiers', sublabel: 'All Gram Weights Included' },
+    { value: '0-5', label: '0 – 5 grams', sublabel: 'Delicate & Minimalist Pieces', badge: '0-5g' },
+    { value: '5-10', label: '5 – 10 grams', sublabel: 'Classic Daily Wear Elegance', badge: '5-10g' },
+    { value: '10-20', label: '10 – 20 grams', sublabel: 'Substantial Artisan Statements', badge: '10-20g' },
+    { value: '20-50', label: '20 – 50 grams', sublabel: 'Heirloom & Festive Sets', badge: '20-50g' },
+    { value: '50+', label: '50+ grams', sublabel: 'Grand Masterpiece Creations', badge: '50g+' },
+  ];
+
+  const priceOptions: LuxuryDropdownOption[] = [
+    { value: '', label: 'All Price Ranges', sublabel: 'Every Valuation Category' },
+    { value: 'under-25k', label: 'Under ₹25,000', sublabel: 'Accessible Fine Jewellery', badge: '< 25K' },
+    { value: '25k-50k', label: '₹25,000 – ₹50,000', sublabel: 'Mid-Tier Classic Collections', badge: '25K–50K' },
+    { value: '50k-100k', label: '₹50,000 – ₹1,00,000', sublabel: 'Premium Fine Jewellery', badge: '50K–100K' },
+    { value: '100k+', label: '₹1,00,000 & Above', sublabel: 'High Jewellery Masterpieces', badge: '100K+' },
+  ];
+
+  const sortOptions: LuxuryDropdownOption[] = [
+    { value: 'featured', label: 'Curated & Featured', sublabel: "Atelier Editor's Selection", badge: 'Default' },
+    { value: 'price-asc', label: 'Price: Low to High', sublabel: 'Ascending Live MRP Valuation', badge: '₹ ↑' },
+    { value: 'price-desc', label: 'Price: High to Low', sublabel: 'High-Value Masterpieces First', badge: '₹ ↓' },
+    { value: 'weight-desc', label: 'Weight: Heavy to Light', sublabel: 'Substantial Metal Weight First', badge: 'g ↓' },
+    { value: 'weight-asc', label: 'Weight: Light to Heavy', sublabel: 'Delicate Gram Weights First', badge: 'g ↑' },
+    { value: 'name-asc', label: 'Alphabetical: A to Z', sublabel: 'Design Code & Title', badge: 'A-Z' },
+  ];
+
+  return (
+    <section id="collections" className="py-16 sm:py-24 lg:py-28 relative overflow-hidden bg-[#F9F5EC]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* ── Section Header ── */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-8 sm:mb-12 gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100/70 border border-amber-300/60 text-[#8C6A28] text-[10px] sm:text-xs font-semibold tracking-[0.25em] uppercase mb-3 shadow-xs">
-              <Sparkles className="w-3.5 h-3.5 text-[#B89047]" />
-              <span>ATELIER AURUM · LIVE MARKET VALUATION</span>
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-semibold text-[#1C1917] tracking-tight">
-              THE MASTER COLLECTION
+            <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-semibold text-[#1C1A17] tracking-tight">
+              Bestseller Products
             </h2>
           </div>
 
@@ -148,150 +289,90 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
           </div>
         </div>
 
-        {/* ── Multi-Criteria Search & Filter Suite (Fully Responsive) ── */}
-        <div className="bg-white/90 backdrop-blur-md border border-stone-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-6 mb-8 sm:mb-10 shadow-sm space-y-4 sm:space-y-5">
-          {/* Row 1: Search & Metal Quick Selector */}
-          <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-stretch md:items-center justify-between">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search piece, SKU, or purity (e.g. Necklace, 22K, Solitaire)..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-9 py-2.5 sm:py-3 rounded-xl border border-stone-200 bg-stone-50/70 text-xs sm:text-sm text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/30 focus:border-[#8C6A28] focus:bg-white transition-all"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer"
-                  aria-label="Clear Search"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Metal Quick Buttons */}
-            <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar py-0.5">
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-stone-500 mr-1 hidden sm:inline">
-                Metal:
-              </span>
-              {[
-                { label: 'All Metals', value: '' },
-                { label: 'Gold', value: 'GOLD' },
-                { label: 'Silver', value: 'SILVER' },
-              ].map((m) => (
-                <button
-                  key={m.label}
-                  onClick={() => {
-                    setMetalFilter(m.value);
-                    setPurityFilter('');
-                  }}
-                  className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold tracking-wider uppercase transition-all cursor-pointer whitespace-nowrap ${
-                    metalFilter === m.value
-                      ? 'bg-[#1C1917] text-amber-200 shadow-sm ring-1 ring-amber-500/30'
-                      : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200/80'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
+        {/* ── Multi-Criteria Search & Filter Suite (Fully Responsive Luxury Design) ── */}
+        <div className="relative z-30 bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-6 mb-8 sm:mb-10 shadow-sm space-y-4 sm:space-y-5">
+          {/* Search Input Row */}
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search piece, SKU, or purity (e.g. Necklace, 22K, Solitaire)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-9 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-stone-200/90 bg-stone-50/70 text-xs sm:text-sm text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/20 focus:border-[#8C6A28] focus:bg-white transition-all shadow-xs"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer"
+                aria-label="Clear Search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          {/* Row 2: Secondary Dropdowns (Purity, Weight Range, Price Range) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-3 sm:pt-4 border-t border-stone-100">
-            {/* Purity Specification */}
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1.5 pl-0.5">
-                Purity Specification
-              </label>
-              <div className="relative">
-                <select
-                  value={purityFilter}
-                  onChange={(e) => setPurityFilter(e.target.value)}
-                  className="w-full appearance-none pl-3.5 pr-8 py-2.5 rounded-xl border border-stone-200 bg-white text-xs sm:text-[13px] text-stone-800 font-medium focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/20 focus:border-[#8C6A28] cursor-pointer shadow-xs"
-                >
-                  {metalFilter === 'GOLD' ? (
-                    <>
-                      <option value="">All Gold Purities</option>
-                      <option value="K24">24K (99.9% Pure Bullion)</option>
-                      <option value="K22">22K (91.6% BIS Hallmark 916)</option>
-                      <option value="K18">18K (75.0% Fine Joaillerie)</option>
-                      <option value="K14">14K (58.5% Everyday Fine)</option>
-                    </>
-                  ) : metalFilter === 'SILVER' ? (
-                    <>
-                      <option value="">All Silver Purities</option>
-                      <option value="SILVER_999">999 Fine Bullion Silver</option>
-                      <option value="SILVER_925">925 Sterling Silver</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="">All Purities (Gold &amp; Silver)</option>
-                      <option value="K24">Gold 24K (999 Pure)</option>
-                      <option value="K22">Gold 22K (916 Hallmark)</option>
-                      <option value="K18">Gold 18K (750 Fine)</option>
-                      <option value="SILVER_999">Silver 999 Bullion</option>
-                      <option value="SILVER_925">Silver 925 Sterling</option>
-                    </>
-                  )}
-                </select>
-                <ChevronDown className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
+          {/* Luxury Custom Dropdowns Suite */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4 pt-3.5 sm:pt-4 border-t border-stone-100">
+            <LuxuryDropdown
+              label="Piece Category"
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              options={categoryOptions}
+              placeholder="View All Categories"
+            />
 
-            {/* Metal Weight Filter */}
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1.5 pl-0.5">
-                Metal Weight (Grams)
-              </label>
-              <div className="relative">
-                <select
-                  value={weightFilter}
-                  onChange={(e) => setWeightFilter(e.target.value)}
-                  className="w-full appearance-none pl-3.5 pr-8 py-2.5 rounded-xl border border-stone-200 bg-white text-xs sm:text-[13px] text-stone-800 font-medium focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/20 focus:border-[#8C6A28] cursor-pointer shadow-xs"
-                >
-                  <option value="">All Weight Tiers</option>
-                  <option value="0-5">0 – 5 grams (Delicate)</option>
-                  <option value="5-10">5 – 10 grams (Classic)</option>
-                  <option value="10-20">10 – 20 grams (Substantial)</option>
-                  <option value="20-50">20 – 50 grams (Heirloom)</option>
-                  <option value="50+">50+ grams (Master Statement)</option>
-                </select>
-                <ChevronDown className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
+            <LuxuryDropdown
+              label="Metal Selection"
+              value={metalFilter}
+              onChange={(val) => {
+                setMetalFilter(val);
+                setPurityFilter(''); // Reset purity when metal changes
+              }}
+              options={metalOptions}
+              placeholder="All Metals"
+            />
 
-            {/* Live Selling Price Filter */}
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1.5 pl-0.5">
-                Live Selling Price
-              </label>
-              <div className="relative">
-                <select
-                  value={priceFilter}
-                  onChange={(e) => setPriceFilter(e.target.value)}
-                  className="w-full appearance-none pl-3.5 pr-8 py-2.5 rounded-xl border border-stone-200 bg-white text-xs sm:text-[13px] text-stone-800 font-medium focus:outline-none focus:ring-2 focus:ring-[#8C6A28]/20 focus:border-[#8C6A28] cursor-pointer shadow-xs"
-                >
-                  <option value="">All Price Ranges</option>
-                  <option value="under-25k">Under ₹25,000</option>
-                  <option value="25k-50k">₹25,000 – ₹50,000</option>
-                  <option value="50k-100k">₹50,000 – ₹1,00,000</option>
-                  <option value="100k+">₹1,00,000 &amp; Above</option>
-                </select>
-                <ChevronDown className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
+            <LuxuryDropdown
+              label="Purity Specification"
+              value={purityFilter}
+              onChange={setPurityFilter}
+              options={purityOptions}
+              placeholder="All Purities"
+            />
+
+            <LuxuryDropdown
+              label="Metal Weight"
+              value={weightFilter}
+              onChange={setWeightFilter}
+              options={weightOptions}
+              placeholder="All Weights"
+            />
+
+            <LuxuryDropdown
+              label="Live Price Range"
+              value={priceFilter}
+              onChange={setPriceFilter}
+              options={priceOptions}
+              placeholder="All Prices"
+            />
+
+            <LuxuryDropdown
+              label="Curated Sorting"
+              value={sortFilter}
+              onChange={setSortFilter}
+              options={sortOptions}
+              placeholder="Featured"
+              icon={<ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />}
+            />
           </div>
 
           {/* Row 3: Active Filter Chips & Item Count Bar */}
           <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             {/* Items Count with Live Marker */}
             <div className="flex items-center gap-2 text-stone-600 font-medium">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
               <span>
                 Showing <strong className="text-stone-900">{products.length}</strong> of{' '}
                 <strong className="text-stone-900">{totalProducts}</strong> live items
@@ -304,7 +385,15 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
                 {search && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-[#8C6A28] border border-amber-200 text-[11px] font-medium">
                     Search: "{search}"
-                    <button onClick={() => setSearch('')} className="hover:text-stone-900 cursor-pointer">
+                    <button type="button" onClick={() => setSearch('')} className="hover:text-stone-900 cursor-pointer">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {categoryFilter && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-[#8C6A28] border border-amber-200 text-[11px] font-medium">
+                    Category: {categoryFilter}
+                    <button type="button" onClick={() => setCategoryFilter('')} className="hover:text-stone-900 cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   </span>
@@ -312,7 +401,7 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
                 {metalFilter && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-[#8C6A28] border border-amber-200 text-[11px] font-medium">
                     Metal: {metalFilter}
-                    <button onClick={() => setMetalFilter('')} className="hover:text-stone-900 cursor-pointer">
+                    <button type="button" onClick={() => setMetalFilter('')} className="hover:text-stone-900 cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   </span>
@@ -320,7 +409,7 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
                 {purityFilter && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-[#8C6A28] border border-amber-200 text-[11px] font-medium">
                     Purity: {purityFilter}
-                    <button onClick={() => setPurityFilter('')} className="hover:text-stone-900 cursor-pointer">
+                    <button type="button" onClick={() => setPurityFilter('')} className="hover:text-stone-900 cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   </span>
@@ -328,7 +417,7 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
                 {weightFilter && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-[#8C6A28] border border-amber-200 text-[11px] font-medium">
                     Weight: {weightFilter}g
-                    <button onClick={() => setWeightFilter('')} className="hover:text-stone-900 cursor-pointer">
+                    <button type="button" onClick={() => setWeightFilter('')} className="hover:text-stone-900 cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   </span>
@@ -336,13 +425,22 @@ export const CuratedSpotlight: FC<CuratedSpotlightProps> = ({
                 {priceFilter && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-[#8C6A28] border border-amber-200 text-[11px] font-medium">
                     Price: {priceFilter}
-                    <button onClick={() => setPriceFilter('')} className="hover:text-stone-900 cursor-pointer">
+                    <button type="button" onClick={() => setPriceFilter('')} className="hover:text-stone-900 cursor-pointer">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {sortFilter && sortFilter !== 'featured' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-[#8C6A28] border border-amber-200 text-[11px] font-medium">
+                    Sort: {sortOptions.find((s) => s.value === sortFilter)?.label || sortFilter}
+                    <button type="button" onClick={() => setSortFilter('featured')} className="hover:text-stone-900 cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   </span>
                 )}
 
                 <button
+                  type="button"
                   onClick={resetFilters}
                   className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-semibold transition-colors cursor-pointer ml-1"
                 >

@@ -36,6 +36,10 @@ export const router = createBrowserRouter([
     element: <Navigate to="/#collections" replace />,
   },
   {
+    path: '/products',
+    element: <Navigate to="/#collections" replace />,
+  },
+  {
     path: '*',
     element: <Navigate to="/" replace />,
   },

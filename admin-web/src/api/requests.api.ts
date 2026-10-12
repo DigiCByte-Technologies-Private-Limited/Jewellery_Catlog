@@ -42,6 +42,7 @@ export interface ProductRequestItem {
   assignedStoreId?: string;
   assignedStore?: StoreItem;
   assignedToUserId?: string;
+  assignedPartner?: WholesalePartnerItem;
   assignedAt?: string;
   followUpAt?: string;
   history?: RequestHistoryItem[];
@@ -169,13 +170,12 @@ export const requestsApi = {
   getWholesalePartners: () =>
     httpClient.get<{ success: boolean; data: WholesalePartnerItem[] }>('/wholesale/auth/partners'),
 
-  assignPartner: (id: string, partnerUserId: string, adminNotes?: string) =>
+  assignPartner: (id: string, partnerUserId: string, note?: string) =>
     httpClient.patch<{ success: boolean; message: string; data: ProductRequestItem }>(
-      `/requests/${id}`,
+      `/requests/${id}/assign-partner`,
       {
-        assignedToUserId: partnerUserId,
-        status: 'ASSIGNED',
-        adminNotes: adminNotes || undefined,
+        partnerUserId,
+        note: note || undefined,
       }
     ),
 

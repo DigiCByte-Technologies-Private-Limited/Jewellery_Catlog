@@ -28,6 +28,13 @@ import {
   type TrackCustomDesignResult,
 } from '../api/custom-designs.api';
 import { useCustomerAuthStore } from '../store/authStore';
+import {
+  isValidEmail,
+  isValidPhone,
+  isValidName,
+  sanitizePhoneNumber,
+  formatRequestId,
+} from '../utils/validation';
 
 export interface CustomDesignSectionProps {
   onOpenConsultation?: () => void;
@@ -166,12 +173,23 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submittedData, setSubmittedData] = useState<{
     requestId: string;
     customerName: string;
     productName: string;
   } | null>(null);
   const [copiedId, setCopiedId] = useState(false);
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   // Active Dropdown state for steps 1-4
   const [activeDropdown, setActiveDropdown] = useState<'silhouette' | 'metal' | 'gem' | 'budget' | null>(null);
@@ -266,17 +284,32 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+    setFieldErrors({});
+
+    const errors: Record<string, string> = {};
 
     if (!formData.customerName.trim()) {
-      setSubmitError('Please provide your full name so our master karigar can address your commission.');
-      return;
+      errors.customerName = 'Please enter your full name.';
+    } else if (!isValidName(formData.customerName)) {
+      errors.customerName = 'Name must be at least 2 characters long.';
     }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      setSubmitError('Please enter a valid email address to receive your formal valuation and design blueprint.');
-      return;
+
+    if (!formData.email.trim()) {
+      errors.email = 'Please enter your email address.';
+    } else if (!isValidEmail(formData.email)) {
+      errors.email = 'Please provide a valid email address.';
     }
+
+    const cleanPhone = sanitizePhoneNumber(formData.phone);
     if (!formData.phone.trim()) {
-      setSubmitError('Please enter your contact phone or WhatsApp number for private consultation.');
+      errors.phone = 'Please provide your phone or WhatsApp number.';
+    } else if (!isValidPhone(cleanPhone)) {
+      errors.phone = 'Please enter a valid 10-digit mobile number.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setSubmitError('Please correct the highlighted fields before transmitting your commission.');
       return;
     }
 
@@ -302,8 +335,8 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
 
       const payload = {
         customerName: formData.customerName.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: cleanPhone,
         companyName: formData.companyName.trim() || undefined,
         productName: `Bespoke ${selectedSilhouette.name} — ${selectedMetal.label}`,
         designDescription: designDescriptionCompiled,
@@ -344,6 +377,7 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
 
   const handleResetForm = () => {
     setSubmittedData(null);
+    setFieldErrors({});
     setUploadedFiles([]);
     setFormData((prev) => ({
       ...prev,
@@ -358,14 +392,27 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
   // Tracking query
   const handleTrackSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!trackQueryId.trim()) return;
+    const cleanId = formatRequestId(trackQueryId);
+    if (!cleanId) {
+      setTrackError('Please enter a valid Request Reference ID (e.g. CDR-2026-0001).');
+      return;
+    }
+
+    let cleanVerifier: string | undefined = undefined;
+    if (trackPhoneOrEmail.trim()) {
+      if (trackPhoneOrEmail.includes('@')) {
+        cleanVerifier = trackPhoneOrEmail.trim().toLowerCase();
+      } else {
+        cleanVerifier = sanitizePhoneNumber(trackPhoneOrEmail);
+      }
+    }
 
     setIsTracking(true);
     setTrackError(null);
     setTrackResult(null);
 
     try {
-      const res = await customDesignsApi.track(trackQueryId.trim(), trackPhoneOrEmail.trim() || undefined);
+      const res = await customDesignsApi.track(cleanId, cleanVerifier);
       if (res.data?.data) {
         setTrackResult(res.data.data);
       } else {
@@ -1120,10 +1167,20 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
                             type="text"
                             required
                             value={formData.customerName}
-                            onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                            onChange={(e) => {
+                              setFormData({ ...formData, customerName: e.target.value });
+                              clearFieldError('customerName');
+                            }}
                             placeholder="Lady Evelyn Montgomery"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-stone-200 bg-[#FAF8F5] text-xs text-stone-900 focus:outline-none focus:border-[#B89047] focus:bg-white transition-colors"
+                            className={`w-full px-3.5 py-2.5 rounded-xl border bg-[#FAF8F5] text-xs text-stone-900 focus:outline-none transition-colors ${
+                              fieldErrors.customerName
+                                ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500 bg-white'
+                                : 'border-stone-200 focus:border-[#B89047] focus:bg-white'
+                            }`}
                           />
+                          {fieldErrors.customerName && (
+                            <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.customerName}</p>
+                          )}
                         </div>
 
                         <div>
@@ -1134,10 +1191,20 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
                             type="email"
                             required
                             value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            onChange={(e) => {
+                              setFormData({ ...formData, email: e.target.value });
+                              clearFieldError('email');
+                            }}
                             placeholder="patron@royalheirloom.com"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-stone-200 bg-[#FAF8F5] text-xs text-stone-900 focus:outline-none focus:border-[#B89047] focus:bg-white transition-colors"
+                            className={`w-full px-3.5 py-2.5 rounded-xl border bg-[#FAF8F5] text-xs text-stone-900 focus:outline-none transition-colors ${
+                              fieldErrors.email
+                                ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500 bg-white'
+                                : 'border-stone-200 focus:border-[#B89047] focus:bg-white'
+                            }`}
                           />
+                          {fieldErrors.email && (
+                            <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.email}</p>
+                          )}
                         </div>
 
                         <div>
@@ -1147,11 +1214,22 @@ export const CustomDesignSection: React.FC<CustomDesignSectionProps> = ({
                           <input
                             type="tel"
                             required
+                            maxLength={14}
                             value={formData.phone}
-                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            onChange={(e) => {
+                              setFormData({ ...formData, phone: e.target.value });
+                              clearFieldError('phone');
+                            }}
                             placeholder="+91 98765 43210"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-stone-200 bg-[#FAF8F5] text-xs text-stone-900 focus:outline-none focus:border-[#B89047] focus:bg-white transition-colors"
+                            className={`w-full px-3.5 py-2.5 rounded-xl border bg-[#FAF8F5] text-xs text-stone-900 focus:outline-none transition-colors ${
+                              fieldErrors.phone
+                                ? 'border-rose-400 ring-1 ring-rose-400 focus:border-rose-500 bg-white'
+                                : 'border-stone-200 focus:border-[#B89047] focus:bg-white'
+                            }`}
                           />
+                          {fieldErrors.phone && (
+                            <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.phone}</p>
+                          )}
                         </div>
                       </div>
 

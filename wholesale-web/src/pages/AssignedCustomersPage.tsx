@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
   Users, Search, Phone, Mail, MessageCircle, MapPin,
@@ -7,7 +6,7 @@ import {
   RefreshCw, Loader2,
   ShoppingBag, Send
 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { wholesaleAuthApi } from '../store/authStore';
 
 interface CustomerRequest {
   id: string;
@@ -55,7 +54,6 @@ const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
 };
 
 export const AssignedCustomersPage = () => {
-  const { accessToken } = useAuthStore();
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -77,12 +75,14 @@ export const AssignedCustomersPage = () => {
   const fetchAssigned = async () => {
     setLoading(true);
     try {
-      const res = await axios.get('http://localhost:3001/api/v1/wholesale/auth/assigned-customers', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const res = await wholesaleAuthApi.get('/assigned-customers');
       setRequests(res.data.data || []);
-    } catch {
-      toast.error('Failed to load assigned customers');
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        toast.error('Session expired. Please log in again.');
+      } else {
+        toast.error('Failed to load assigned customers');
+      }
     } finally {
       setLoading(false);
     }
@@ -97,15 +97,11 @@ export const AssignedCustomersPage = () => {
     if (!selectedReqForFollowUp) return;
     setSavingAction(true);
     try {
-      await axios.patch(
-        `http://localhost:3001/api/v1/wholesale/auth/assigned-customers/${selectedReqForFollowUp.id}/follow-up`,
-        {
-          note: followUpNote,
-          customerResponse: customerResponse || undefined,
-          nextFollowUpDate: nextDate || undefined,
-        },
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
+      await wholesaleAuthApi.patch(`/assigned-customers/${selectedReqForFollowUp.id}/follow-up`, {
+        note: followUpNote,
+        customerResponse: customerResponse || undefined,
+        nextFollowUpDate: nextDate || undefined,
+      });
       toast.success('Customer follow-up logged successfully');
       setSelectedReqForFollowUp(null);
       setFollowUpNote('');
@@ -124,15 +120,11 @@ export const AssignedCustomersPage = () => {
     if (!selectedReqForOutcome) return;
     setSavingAction(true);
     try {
-      await axios.patch(
-        `http://localhost:3001/api/v1/wholesale/auth/assigned-customers/${selectedReqForOutcome.id}/outcome`,
-        {
-          purchaseStatus: outcomeStatus,
-          purchaseNotes: outcomeNotes || undefined,
-          confirmedQuantity: outcomeStatus === 'APPROVED' ? Number(confirmedQty) : undefined,
-        },
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
+      await wholesaleAuthApi.patch(`/assigned-customers/${selectedReqForOutcome.id}/outcome`, {
+        purchaseStatus: outcomeStatus,
+        purchaseNotes: outcomeNotes || undefined,
+        confirmedQuantity: outcomeStatus === 'APPROVED' ? Number(confirmedQty) : undefined,
+      });
       toast.success(`Customer request marked as ${outcomeStatus}`);
       setSelectedReqForOutcome(null);
       setOutcomeNotes('');

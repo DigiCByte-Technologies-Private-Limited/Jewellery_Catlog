@@ -211,6 +211,22 @@ export const LoginPage = () => {
                 'Sign In to Wholesale Portal'
               )}
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setForm({
+                  email: 'rajeevnalluri0124@gmail.com',
+                  password: 'Rajeev@1234',
+                });
+                setError('');
+                toast.success('Filled verified partner credentials');
+              }}
+              className="w-full py-2.5 px-4 mt-2 rounded-xl border border-dashed border-[#B89047]/40 text-[#8C6A28] bg-amber-50/50 hover:bg-amber-100/50 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#B89047]" />
+              Auto-fill Verified Partner (Rajeev Nalluri)
+            </button>
           </form>
 
           <div className="mt-6 pt-6 border-t border-stone-100 text-center">
